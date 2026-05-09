@@ -30,7 +30,6 @@
     cursor: crosshair;
   }
 
-  /* Subtle film grain overlay */
   body::before {
     content: '';
     position: fixed;
@@ -46,7 +45,6 @@
 
   ::selection { background: var(--accent); color: var(--fg); }
 
-  /* ============ NAV ============ */
   nav {
     position: fixed;
     top: 0; left: 0; right: 0;
@@ -64,6 +62,8 @@
     font-weight: 900;
     font-size: 1.1rem;
     letter-spacing: 0.4em;
+    color: var(--fg);
+    text-decoration: none;
   }
   nav .logo span { color: var(--accent-2); }
   nav ul { list-style: none; display: flex; gap: 2.5rem; }
@@ -87,7 +87,6 @@
   nav a:hover { opacity: 1; }
   nav a:hover::before { opacity: 1; }
 
-  /* ============ HERO ============ */
   .hero {
     min-height: 100vh;
     display: grid;
@@ -211,7 +210,6 @@
   .btn.primary::before { background: var(--accent-2); }
   .btn.primary:hover { color: var(--bg); }
 
-  /* Hero image */
   .hero-img {
     position: relative;
     z-index: 1;
@@ -249,7 +247,6 @@
     filter: contrast(1.1) brightness(0.95);
   }
 
-  /* Corner brackets on image */
   .hero-img-wrap .corner {
     position: absolute;
     width: 20px;
@@ -276,7 +273,6 @@
     text-transform: uppercase;
   }
 
-  /* Floating version tag */
   .version-tag {
     position: absolute;
     top: 50%;
@@ -293,7 +289,6 @@
     z-index: 3;
   }
 
-  /* ============ DIVIDER ============ */
   .divider {
     display: flex;
     align-items: center;
@@ -313,7 +308,6 @@
   }
   .divider .ornament { color: var(--accent-2); }
 
-  /* ============ FEATURES ============ */
   .features {
     padding: 4rem 3rem 8rem;
     max-width: 1400px;
@@ -407,7 +401,6 @@
     text-transform: uppercase;
   }
 
-  /* ============ DOWNLOAD STRIP ============ */
   .download {
     padding: 8rem 3rem;
     text-align: center;
@@ -461,7 +454,6 @@
     display: block;
   }
 
-  /* ============ FOOTER ============ */
   footer {
     padding: 4rem 3rem 2rem;
     display: flex;
@@ -487,7 +479,6 @@
     opacity: 0.12;
   }
 
-  /* Reveal animations on scroll */
   .reveal {
     opacity: 0;
     transform: translateY(40px);
@@ -495,7 +486,6 @@
   }
   .reveal.in { opacity: 1; transform: translateY(0); }
 
-  /* Floating butterfly cursor follower */
   .butterfly {
     position: fixed;
     width: 30px;
@@ -520,13 +510,12 @@
 </head>
 <body>
 
-<!-- Cursor butterfly -->
 <svg class="butterfly" id="butterfly" viewBox="0 0 100 100" fill="none">
   <path d="M50 50 Q30 20 10 30 Q20 50 50 50 Q20 50 10 70 Q30 80 50 50 Q70 20 90 30 Q80 50 50 50 Q80 50 90 70 Q70 80 50 50" stroke="#9d6cd1" stroke-width="1" fill="rgba(107, 63, 160, 0.25)"/>
 </svg>
 
 <nav>
-  <div class="logo">S<span>·</span>S<span>·</span>P</div>
+  <a href="index.html" class="logo">S<span>·</span>S<span>·</span>P</a>
   <ul>
     <li><a href="#features">Features</a></li>
     <li><a href="database.html">Database</a></li>
@@ -543,7 +532,7 @@
       <span class="word"><span>Service</span></span>
       <span class="word"><span>Panel.</span></span>
     </h1>
-    <p class="lede">A mod menu for those who'd rather watch the world come undone slowly. Built quiet, undetected, lovingly cursed.</p>
+    <p class="lede">A Gorilla Tag mod menu for monkeys who play smarter than the rest. Quiet injection, clean UI, every mod you actually want.</p>
     <div class="hero-cta">
       <a href="#download" class="btn primary">↓ Download</a>
       <a href="#features" class="btn">Read more</a>
@@ -560,7 +549,7 @@
       <div class="version-tag">SPECIMEN · 047</div>
     </div>
     <div class="hero-meta">
-      <span>◆ Encrypted</span>
+      <span>◆ PCVR · Quest</span>
       <span>◆ Updated 09.05.26</span>
     </div>
   </div>
@@ -577,55 +566,55 @@
 <section class="features" id="features">
   <div class="features-header reveal">
     <h2>What's <em>inside.</em></h2>
-    <p>Every option you wanted, none you didn't.</p>
+    <p>Every mod the room sweat needs, none of the bloat.</p>
   </div>
 
   <div class="feature-grid">
     <div class="feature reveal">
       <div class="feature-num">— 01 —</div>
       <div class="feature-icon">✦</div>
-      <h3>Aimbot</h3>
-      <p>Smooth tracking with configurable FOV, bone targeting, and visibility checks. Tunable down to the millisecond.</p>
+      <h3>Movement</h3>
+      <p>Speed boost, fly, noclip, platforms, long arms, and air jump. Tunable sliders so you can dial it from "subtle" to "obvious."</p>
       <span class="feature-tag">Stable</span>
     </div>
 
     <div class="feature reveal">
       <div class="feature-num">— 02 —</div>
       <div class="feature-icon">❖</div>
-      <h3>ESP / Wallhack</h3>
-      <p>Player boxes, skeletons, names, distance, health bars. Pick your colors — or let them all stay violet.</p>
+      <h3>Tag Mods</h3>
+      <p>Tag range extender, infect everyone, freeze tag, lava tag, ghost tag. Win every round in Casual without breaking a sweat.</p>
       <span class="feature-tag">Stable</span>
     </div>
 
     <div class="feature reveal">
       <div class="feature-num">— 03 —</div>
       <div class="feature-icon">✧</div>
-      <h3>Movement</h3>
-      <p>Bunny hop, auto strafe, edge bug, slide cancel — every micro-trick a real player would kill to have without thinking.</p>
+      <h3>Player ESP</h3>
+      <p>See player names, distances, IDs, and roles through walls. Highlight creators, mods, and known sweats with color-coded outlines.</p>
       <span class="feature-tag">Stable</span>
     </div>
 
     <div class="feature reveal">
       <div class="feature-num">— 04 —</div>
       <div class="feature-icon">⚜</div>
-      <h3>Visuals</h3>
-      <p>Custom HUD, chams, glow, world modifiers, removal of fog and post-processing. Make the game look how it should.</p>
+      <h3>Cosmetics</h3>
+      <p>Unlock every hat, badge, face, and color. Custom holdables. Free Cosmetic X integration. Dress your gorilla however you want.</p>
       <span class="feature-tag">Stable</span>
     </div>
 
     <div class="feature reveal">
       <div class="feature-num">— 05 —</div>
       <div class="feature-icon">☩</div>
-      <h3>Configs</h3>
-      <p>Save, load, share. JSON-based. Cloud-synced if you want it, local-only if you don't.</p>
+      <h3>Room Tools</h3>
+      <p>Join private rooms, lobby spy, room hopper, code grabber. Auto-rejoin if you get kicked. Spam protection on incoming chat.</p>
       <span class="feature-tag">Stable</span>
     </div>
 
     <div class="feature reveal">
       <div class="feature-num">— 06 —</div>
       <div class="feature-icon">✦</div>
-      <h3>Stealth</h3>
-      <p>Manual mapped, kernel-level driver, randomized signatures every build. Quiet enough to disappear.</p>
+      <h3>Stealth Loader</h3>
+      <p>Manual mapped DLL injection. Randomized signatures every build. Built to survive BepInEx detection sweeps and stay quiet.</p>
       <span class="feature-tag">Beta</span>
     </div>
   </div>
@@ -633,11 +622,11 @@
 
 <section class="download" id="download">
   <h2 class="reveal">Take it <em>home.</em></h2>
-  <p class="reveal">Free for now. The price is your patience.</p>
+  <p class="reveal">Free. Forever. Discord required for support.</p>
   <div class="stats reveal">
     <div class="stat">
       <span class="num">12,471</span>
-      <span class="label">Active users</span>
+      <span class="label">Active monkeys</span>
     </div>
     <div class="stat">
       <span class="num">99.2%</span>
@@ -645,7 +634,7 @@
     </div>
     <div class="stat">
       <span class="num">0</span>
-      <span class="label">Detections</span>
+      <span class="label">Bans reported</span>
     </div>
   </div>
   <div class="reveal">
@@ -656,13 +645,12 @@
 <footer>
   <div class="big">SECRET SERVICE</div>
   <span>© S.S.P. MMXXVI</span>
-  <span>Built quiet</span>
+  <span>Not affiliated with Another Axiom</span>
   <span>Discord · Telegram · Github</span>
   <span>For educational purposes</span>
 </footer>
 
 <script>
-  // Butterfly cursor follower
   const butterfly = document.getElementById('butterfly');
   let bx = 0, by = 0, tx = 0, ty = 0;
   document.addEventListener('mousemove', (e) => {
@@ -678,7 +666,6 @@
   }
   flutter();
 
-  // Scroll reveals
   const io = new IntersectionObserver((entries) => {
     entries.forEach(e => {
       if (e.isIntersecting) {

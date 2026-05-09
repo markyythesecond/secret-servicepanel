@@ -16,6 +16,7 @@
     --accent-2: #9d6cd1;
     --accent-glow: rgba(107, 63, 160, 0.45);
     --border: rgba(237, 237, 237, 0.12);
+    --alert-bg: linear-gradient(90deg, #4a1f7a, #6b3fa0, #4a1f7a);
   }
 
   * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -45,9 +46,86 @@
 
   ::selection { background: var(--accent); color: var(--fg); }
 
+  /* ============ ALERT BAR ============ */
+  .alert-bar {
+    position: relative;
+    background: var(--alert-bg);
+    background-size: 200% 100%;
+    animation: shimmer 8s linear infinite;
+    color: var(--fg);
+    padding: 0.7rem 3rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 1rem;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.75rem;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    z-index: 101;
+    border-bottom: 1px solid rgba(255,255,255,0.15);
+  }
+
+  @keyframes shimmer {
+    0% { background-position: 0% 50%; }
+    100% { background-position: 200% 50%; }
+  }
+
+  .alert-bar .pulse {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: #fff;
+    box-shadow: 0 0 12px #fff, 0 0 24px var(--accent-2);
+    animation: pulse 1.5s ease-in-out infinite;
+    flex-shrink: 0;
+  }
+
+  @keyframes pulse {
+    0%, 100% { opacity: 1; transform: scale(1); }
+    50% { opacity: 0.5; transform: scale(1.3); }
+  }
+
+  .alert-bar .alert-text {
+    flex: 1;
+    text-align: center;
+  }
+
+  .alert-bar .alert-text a {
+    color: #fff;
+    text-decoration: underline;
+    text-underline-offset: 3px;
+    margin-left: 0.5rem;
+    font-weight: 700;
+  }
+
+  .alert-bar .close {
+    background: transparent;
+    border: 1px solid rgba(255,255,255,0.4);
+    color: var(--fg);
+    width: 22px;
+    height: 22px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: crosshair;
+    font-size: 0.75rem;
+    transition: all 0.2s;
+    flex-shrink: 0;
+  }
+  .alert-bar .close:hover {
+    background: rgba(255,255,255,0.15);
+    border-color: #fff;
+  }
+
+  .alert-bar.hidden { display: none; }
+  body.no-alert nav { top: 0; }
+
+  /* ============ NAV ============ */
   nav {
     position: fixed;
-    top: 0; left: 0; right: 0;
+    top: 42px;
+    left: 0; right: 0;
     padding: 1.5rem 3rem;
     display: flex;
     justify-content: space-between;
@@ -56,6 +134,7 @@
     backdrop-filter: blur(8px);
     background: rgba(8, 7, 10, 0.5);
     border-bottom: 1px solid var(--border);
+    transition: top 0.3s;
   }
   nav .logo {
     font-family: 'Cinzel', serif;
@@ -92,7 +171,7 @@
     display: grid;
     grid-template-columns: 1.1fr 1fr;
     align-items: center;
-    padding: 8rem 3rem 4rem;
+    padding: 9rem 3rem 4rem;
     gap: 4rem;
     position: relative;
     overflow: hidden;
@@ -296,11 +375,7 @@
     padding: 6rem 3rem 2rem;
     color: var(--gray);
   }
-  .divider hr {
-    flex: 1;
-    border: none;
-    border-top: 1px solid var(--border);
-  }
+  .divider hr { flex: 1; border: none; border-top: 1px solid var(--border); }
   .divider span {
     font-family: 'Cinzel', serif;
     font-size: 1.1rem;
@@ -314,11 +389,7 @@
     margin: 0 auto;
   }
 
-  .features-header {
-    text-align: center;
-    margin-bottom: 5rem;
-  }
-
+  .features-header { text-align: center; margin-bottom: 5rem; }
   .features-header h2 {
     font-family: 'Cinzel', serif;
     font-size: clamp(2.5rem, 6vw, 5rem);
@@ -332,11 +403,7 @@
     font-weight: 300;
     color: var(--accent-2);
   }
-  .features-header p {
-    font-style: italic;
-    color: var(--gray);
-    font-size: 1.1rem;
-  }
+  .features-header p { font-style: italic; color: var(--gray); font-size: 1.1rem; }
 
   .feature-grid {
     display: grid;
@@ -353,9 +420,7 @@
     position: relative;
     cursor: crosshair;
   }
-  .feature:hover {
-    background: #15101c;
-  }
+  .feature:hover { background: #15101c; }
   .feature:hover .feature-num { color: var(--accent-2); }
 
   .feature-num {
@@ -383,11 +448,7 @@
     margin-bottom: 1rem;
   }
 
-  .feature p {
-    color: var(--gray);
-    line-height: 1.6;
-    font-size: 1rem;
-  }
+  .feature p { color: var(--gray); line-height: 1.6; font-size: 1rem; }
 
   .feature-tag {
     display: inline-block;
@@ -498,17 +559,32 @@
   }
 
   @media (max-width: 900px) {
-    .hero { grid-template-columns: 1fr; padding: 7rem 1.5rem 3rem; }
+    .hero { grid-template-columns: 1fr; padding: 9rem 1.5rem 3rem; }
     .feature-grid { grid-template-columns: 1fr; }
     nav { padding: 1rem 1.5rem; }
     nav ul { gap: 1.2rem; }
     .stats { flex-direction: column; gap: 1.5rem; }
     .features, .download, footer { padding-left: 1.5rem; padding-right: 1.5rem; }
     .divider { padding-left: 1.5rem; padding-right: 1.5rem; }
+    .alert-bar { padding: 0.6rem 1rem; font-size: 0.65rem; }
+    .alert-bar .alert-text { text-align: left; }
   }
 </style>
 </head>
 <body>
+
+<!-- ============================================ -->
+<!-- ALERT BAR — edit the text below to change it -->
+<!-- Bump ALERT_ID in the script to re-show it    -->
+<!-- to people who already dismissed the old one. -->
+<!-- ============================================ -->
+<div class="alert-bar" id="alert">
+  <span class="pulse"></span>
+  <div class="alert-text">
+    ✦ i love you
+  </div>
+  <button class="close" id="closeAlert" title="Dismiss">✕</button>
+</div>
 
 <svg class="butterfly" id="butterfly" viewBox="0 0 100 100" fill="none">
   <path d="M50 50 Q30 20 10 30 Q20 50 50 50 Q20 50 10 70 Q30 80 50 50 Q70 20 90 30 Q80 50 50 50 Q80 50 90 70 Q70 80 50 50" stroke="#9d6cd1" stroke-width="1" fill="rgba(107, 63, 160, 0.25)"/>
@@ -532,7 +608,7 @@
       <span class="word"><span>Service</span></span>
       <span class="word"><span>Panel.</span></span>
     </h1>
-    <p class="lede">A Gorilla Tag mod menu for monkeys who play smarter than the rest. Quiet injection, clean UI, every mod you actually want. shoutout to padme btw <3</p>
+    <p class="lede">A Gorilla Tag mod menu for monkeys who play smarter than the rest. Quiet injection, clean UI, every mod you actually want.</p>
     <div class="hero-cta">
       <a href="#download" class="btn primary">↓ Download</a>
       <a href="#features" class="btn">Read more</a>
@@ -651,6 +727,25 @@
 </footer>
 
 <script>
+  // ============ ALERT BAR ============
+  // To change the alert: edit the text inside <div class="alert-text">
+  // To re-show it to people who dismissed the old one: change ALERT_ID below
+  const ALERT_ID = 'v247-launch';
+  const alertBar = document.getElementById('alert');
+  const closeBtn = document.getElementById('closeAlert');
+
+  if (localStorage.getItem('dismissedAlert') === ALERT_ID) {
+    alertBar.classList.add('hidden');
+    document.body.classList.add('no-alert');
+  }
+
+  closeBtn.addEventListener('click', () => {
+    alertBar.classList.add('hidden');
+    document.body.classList.add('no-alert');
+    localStorage.setItem('dismissedAlert', ALERT_ID);
+  });
+
+  // ============ BUTTERFLY CURSOR ============
   const butterfly = document.getElementById('butterfly');
   let bx = 0, by = 0, tx = 0, ty = 0;
   document.addEventListener('mousemove', (e) => {
@@ -666,6 +761,7 @@
   }
   flutter();
 
+  // ============ SCROLL REVEALS ============
   const io = new IntersectionObserver((entries) => {
     entries.forEach(e => {
       if (e.isIntersecting) {

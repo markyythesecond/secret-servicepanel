@@ -1,7 +1,3 @@
-// ==========================================================================
-// SHARED THEME SWITCHER
-// Include this on every page with: <script src="theme.js"></script>
-// ==========================================================================
 
 (function() {
   const THEMES = {

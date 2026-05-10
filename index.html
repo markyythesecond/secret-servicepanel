@@ -86,11 +86,7 @@
     50% { opacity: 0.5; transform: scale(1.3); }
   }
 
-  .alert-bar .alert-text {
-    flex: 1;
-    text-align: center;
-  }
-
+  .alert-bar .alert-text { flex: 1; text-align: center; }
   .alert-bar .alert-text a {
     color: #fff;
     text-decoration: underline;
@@ -574,14 +570,14 @@
 <body>
 
 <!-- ============================================ -->
-<!-- ALERT BAR — edit the text below to change it -->
-<!-- Bump ALERT_ID in the script to re-show it    -->
-<!-- to people who already dismissed the old one. -->
+<!-- ALERT BAR — edit text below to change it     -->
+<!-- Bump ALERT_ID in script to re-show it.       -->
 <!-- ============================================ -->
 <div class="alert-bar" id="alert">
   <span class="pulse"></span>
   <div class="alert-text">
-    ✦ Feel the wind. ✦ 
+    ✦ V 2.4.7 IS LIVE — TAG MODS PATCHED, NEW ANTI-DETECTION
+    <a href="#download">Download now ↗</a>
   </div>
   <button class="close" id="closeAlert" title="Dismiss">✕</button>
 </div>
@@ -595,6 +591,7 @@
   <ul>
     <li><a href="#features">Features</a></li>
     <li><a href="database.html">Database</a></li>
+    <li><a href="credits.html">Credits</a></li>
     <li><a href="#download">Download</a></li>
     <li><a href="#">Discord</a></li>
   </ul>
@@ -608,7 +605,7 @@
       <span class="word"><span>Service</span></span>
       <span class="word"><span>Panel.</span></span>
     </h1>
-    <p class="lede">A Gorilla Tag mod menu for monkeys who play smarter than the rest. Quiet injection, clean UI, every mod you actually want made by mark of course. .)</p>
+    <p class="lede">A Gorilla Tag mod menu for monkeys who play smarter than the rest. Quiet injection, clean UI, every mod you actually want.</p>
     <div class="hero-cta">
       <a href="#download" class="btn primary">↓ Download</a>
       <a href="#features" class="btn">Read more</a>
@@ -726,10 +723,11 @@
   <span>For educational purposes</span>
 </footer>
 
+<script src="theme.js"></script>
 <script>
   // ============ ALERT BAR ============
-  // To change the alert: edit the text inside <div class="alert-text">
-  // To re-show it to people who dismissed the old one: change ALERT_ID below
+  // To change alert text: edit the <div class="alert-text"> above
+  // To re-show after dismissals: change ALERT_ID
   const ALERT_ID = 'v247-launch';
   const alertBar = document.getElementById('alert');
   const closeBtn = document.getElementById('closeAlert');

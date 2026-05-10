@@ -47,7 +47,6 @@
 
   ::selection { background: var(--accent); color: var(--fg); }
 
-  /* ============ NAV ============ */
   nav {
     position: fixed;
     top: 0; left: 0; right: 0;
@@ -90,7 +89,6 @@
   nav a:hover::before, nav a.active::before { opacity: 1; }
   nav a.active { opacity: 1; color: var(--accent-2); }
 
-  /* ============ HEADER ============ */
   .header {
     padding: 10rem 3rem 3rem;
     text-align: center;
@@ -142,7 +140,6 @@
     font-style: italic;
   }
 
-  /* ============ SEARCH BAR ============ */
   .search-section {
     max-width: 1200px;
     margin: 0 auto;
@@ -243,7 +240,6 @@
 
   .result-count .count { color: var(--accent-2); }
 
-  /* ============ TABLE ============ */
   .table-section {
     max-width: 1200px;
     margin: 0 auto;
@@ -285,9 +281,7 @@
     transition: background 0.15s;
   }
 
-  .id-table tr:hover td {
-    background: var(--bg-3);
-  }
+  .id-table tr:hover td { background: var(--bg-3); }
   .id-table tr:last-child td { border-bottom: none; }
 
   .id-table .col-name {
@@ -298,10 +292,7 @@
     color: var(--fg);
   }
 
-  .id-table .col-creator {
-    color: var(--gray);
-    font-size: 0.8rem;
-  }
+  .id-table .col-creator { color: var(--gray); font-size: 0.8rem; }
 
   .id-table .col-id {
     color: var(--accent-2);
@@ -310,10 +301,7 @@
     user-select: all;
   }
 
-  .id-table .col-action {
-    width: 80px;
-    text-align: right;
-  }
+  .id-table .col-action { width: 80px; text-align: right; }
 
   .copy-btn {
     background: transparent;
@@ -338,7 +326,6 @@
     color: var(--bg);
   }
 
-  /* highlight matched text */
   .hl {
     background: var(--accent);
     color: var(--fg);
@@ -354,7 +341,6 @@
     border: 1px dashed var(--border);
   }
 
-  /* ============ FOOTER ============ */
   footer {
     padding: 4rem 3rem 2rem;
     border-top: 1px solid var(--border);
@@ -369,7 +355,6 @@
     text-transform: uppercase;
   }
 
-  /* mobile */
   @media (max-width: 800px) {
     nav { padding: 1rem 1.5rem; }
     nav ul { gap: 1.2rem; }
@@ -408,6 +393,7 @@
   <ul>
     <li><a href="index.html#features">Features</a></li>
     <li><a href="database.html" class="active">Database</a></li>
+    <li><a href="credits.html">Credits</a></li>
     <li><a href="index.html#download">Download</a></li>
     <li><a href="#">Discord</a></li>
   </ul>
@@ -471,6 +457,7 @@
   <span>For educational purposes</span>
 </footer>
 
+<script src="theme.js"></script>
 <script>
 const data = [
   {"name":"UNKNOWN","creator":"PineConeLOL","id":"916949553842BB2F"},
@@ -564,7 +551,7 @@ const data = [
   {"name":"MOJJII","creator":"AA","id":"413731256C771F5B"},
   {"name":"MINTYVAL","creator":"AA","id":"EF512A9709BAA50B"},
   {"name":"MURTIVR","creator":"AA","id":"34E2D05F071812B1"},
-  {"name":"KFF","creator":"Stupid Fucking Larp","id":"BAF4E434D34DFA1E"},
+  {"name":"KFF","creator":"Larp","id":"BAF4E434D34DFA1E"},
   {"name":"SNAPTOASTVR","creator":"AA","id":"9F3ED2B510CF4CA9"},
   {"name":"LOCALMELT","creator":"Youtuber","id":"BD05DB02B3DB50D1"},
   {"name":"DENYXAR","creator":"AA","id":"EB5945B3A4647DCF"},
@@ -579,7 +566,7 @@ const data = [
   {"name":"ANTOCA","creator":"FG","id":"ECDE8A2FF8510934"},
   {"name":"MRSWEDISHKID","creator":"YT","id":"54DC6709B82B33B2"},
   {"name":"OTOO","creator":"AA","id":"5F79C522C21F1049"},
-  {"name":"67FURRYVAPE","creator":"gay","id":"E0AF4A94DFF5E2FD"},
+  {"name":"67FURRYVAPE","creator":"unknown","id":"E0AF4A94DFF5E2FD"},
   {"name":"APEX","creator":"apex","id":"20A1FA859D0ECFC"},
   {"name":"THINH","creator":"AA","id":"ECB28FB17ABCD2AB"},
   {"name":"FLAMES","creator":"AA","id":"6DE72E95D0D0C0DA"},
@@ -590,7 +577,7 @@ const data = [
   {"name":"MELTED85K","creator":"AA","id":"827F45E01894AD1F"},
   {"name":"ALEX","creator":"AA","id":"4D146D0448540A45"},
   {"name":"VRAGE","creator":"AA","id":"9CBA70FC29C21518"},
-  {"name":"PRESIDENT","creator":"donaldjtrumpbutnotreal","id":"73FACFD63A7D903D"},
+  {"name":"PRESIDENT","creator":"impersonator","id":"73FACFD63A7D903D"},
   {"name":"CANDY","creator":"AA","id":"78E17A18BD88486"},
   {"name":"GUPPY","creator":"AA","id":"93DCC48EDB0EA33D"},
   {"name":"NORTH","creator":"AA","id":"CF799173F606A879"},
@@ -698,7 +685,6 @@ chips.forEach(chip => {
   });
 });
 
-// Copy button (delegated)
 tbody.addEventListener('click', (e) => {
   const btn = e.target.closest('.copy-btn');
   if (!btn) return;
@@ -715,7 +701,6 @@ tbody.addEventListener('click', (e) => {
   });
 });
 
-// Keyboard shortcut: / to focus search
 document.addEventListener('keydown', (e) => {
   if (e.key === '/' && document.activeElement !== search) {
     e.preventDefault();

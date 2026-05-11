@@ -8,7 +8,7 @@
   // ============ STATUS INDICATOR ============
   // Edit STATUS below to change site status everywhere at once.
   // Options: 'online', 'issues', 'down', 'maintenance'
-  const STATUS = 'maintenance';
+  const STATUS = 'down';
 
   const STATUS_INFO = {
     online:      { label: 'OPERATIONAL', color: '#3dd676', glow: 'rgba(61, 214, 118, 0.6)' },

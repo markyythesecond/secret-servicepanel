@@ -20,7 +20,7 @@
   function buildStatus() {
     const nav = document.querySelector('nav');
     if (!nav) return;
-    const info = STATUS_INFO[STATUS] || STATUS_INFO.online;
+    const info = STATUS_INFO[STATUS] || STATUS_INFO.maintenance;
     const el = document.createElement('div');
     el.className = 'status-pill';
     el.innerHTML = `

@@ -46,7 +46,6 @@
 
   ::selection { background: var(--accent); color: var(--fg); }
 
-  /* ============ NAV ============ */
   nav {
     position: fixed;
     top: 0; left: 0; right: 0;
@@ -79,24 +78,17 @@
     opacity: 0.7;
     transition: all 0.2s;
   }
-  nav a::before {
-    content: '✦ ';
-    color: var(--accent-2);
-    opacity: 0;
-    transition: opacity 0.2s;
-  }
+  nav a::before { content: '✦ '; color: var(--accent-2); opacity: 0; transition: opacity 0.2s; }
   nav a:hover { opacity: 1; }
   nav a:hover::before, nav a.active::before { opacity: 1; }
   nav a.active { opacity: 1; color: var(--accent-2); }
 
-  /* ============ HEADER ============ */
   .header {
     padding: 10rem 3rem 3rem;
     text-align: center;
     position: relative;
     overflow: hidden;
   }
-
   .header::after {
     content: '';
     position: absolute;
@@ -105,7 +97,6 @@
     pointer-events: none;
     z-index: 0;
   }
-
   .header-inner { position: relative; z-index: 1; }
 
   .eyebrow {
@@ -141,16 +132,13 @@
     font-style: italic;
   }
 
-  /* ============ CREDITS CONTENT ============ */
   .credits {
     max-width: 1100px;
     margin: 0 auto;
     padding: 2rem 3rem 6rem;
   }
 
-  .section {
-    margin-bottom: 5rem;
-  }
+  .section { margin-bottom: 5rem; }
 
   .section-title {
     display: flex;
@@ -158,13 +146,7 @@
     gap: 1.5rem;
     margin-bottom: 2.5rem;
   }
-
-  .section-title hr {
-    flex: 1;
-    border: none;
-    border-top: 1px solid var(--border);
-  }
-
+  .section-title hr { flex: 1; border: none; border-top: 1px solid var(--border); }
   .section-title h2 {
     font-family: 'Cinzel', serif;
     font-size: 1.5rem;
@@ -174,7 +156,6 @@
     text-transform: uppercase;
     flex-shrink: 0;
   }
-
   .section-title .num {
     font-family: 'JetBrains Mono', monospace;
     font-size: 0.7rem;
@@ -182,7 +163,6 @@
     color: var(--muted);
   }
 
-  /* Featured cards (founders / lead devs) */
   .featured-grid {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
@@ -249,7 +229,6 @@
     padding: 0.15rem 0.5rem;
   }
 
-  /* Simple list (testers / contributors) */
   .name-grid {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
@@ -272,10 +251,7 @@
     background: var(--bg);
   }
 
-  .name-item .marker {
-    color: var(--accent-2);
-    font-size: 0.7rem;
-  }
+  .name-item .marker { color: var(--accent-2); font-size: 0.7rem; }
 
   .name-item .name {
     font-family: 'Cinzel', serif;
@@ -293,7 +269,6 @@
     margin-left: auto;
   }
 
-  /* Special thanks */
   .thanks {
     background: var(--bg-2);
     border: 1px solid var(--border);
@@ -331,7 +306,6 @@
     text-transform: uppercase;
   }
 
-  /* Reveal animations */
   .reveal {
     opacity: 0;
     transform: translateY(30px);
@@ -339,7 +313,6 @@
   }
   .reveal.in { opacity: 1; transform: translateY(0); }
 
-  /* Footer */
   footer {
     padding: 4rem 3rem 2rem;
     border-top: 1px solid var(--border);
@@ -373,6 +346,7 @@
     <li><a href="index.html#features">Features</a></li>
     <li><a href="database.html">Database</a></li>
     <li><a href="credits.html" class="active">Credits</a></li>
+    <li><a href="terminal.html">Terminal</a></li>
     <li><a href="index.html#download">Download</a></li>
     <li><a href="#">Discord</a></li>
   </ul>
@@ -388,7 +362,6 @@
 
 <div class="credits">
 
-  <!-- ========== FOUNDERS / LEAD DEVS ========== -->
   <div class="section">
     <div class="section-title reveal">
       <span class="num">— 01 —</span>
@@ -398,7 +371,7 @@
     <div class="featured-grid">
       <div class="featured reveal">
         <div class="featured-role">Founder · Lead Developer</div>
-        <div class="featured-name">Mark</div>
+        <div class="featured-name">Markyy</div>
         <div class="featured-handle">@markyythesecond</div>
         <p class="featured-bio">"Started this because every other menu was either bloated, paid, or detected. Wanted something quiet that just worked."</p>
         <div class="featured-tags">
@@ -409,10 +382,10 @@
       </div>
 
       <div class="featured reveal">
-        <div class="featured-role">Co-Owner · UI</div>
-        <div class="featured-name">Claude AI</div>
+        <div class="featured-role">Co-Developer · UI</div>
+        <div class="featured-name">Claude</div>
         <div class="featured-handle">@claude.ai</div>
-        <p class="featured-bio">"After getting tired of menus that were overloaded, paywalled, or caught instantly. Needed something simple, quiet, and dependable that stayed out of the way and actually did its job."</p>
+        <p class="featured-bio">"Claude is a helpful assistant."</p>
         <div class="featured-tags">
           <span>Frontend</span>
           <span>UI/UX</span>
@@ -421,7 +394,6 @@
     </div>
   </div>
 
-  <!-- ========== DEVS ========== -->
   <div class="section">
     <div class="section-title reveal">
       <span class="num">— 02 —</span>
@@ -429,30 +401,13 @@
       <hr>
     </div>
     <div class="name-grid reveal">
-      <div class="name-item">
-        <span class="marker">✦</span>
-        <span class="name">DevName1</span>
-        <span class="role">Mods</span>
-      </div>
-      <div class="name-item">
-        <span class="marker">✦</span>
-        <span class="name">DevName2</span>
-        <span class="role">ESP</span>
-      </div>
-      <div class="name-item">
-        <span class="marker">✦</span>
-        <span class="name">DevName3</span>
-        <span class="role">Cosmetics</span>
-      </div>
-      <div class="name-item">
-        <span class="marker">✦</span>
-        <span class="name">DevName4</span>
-        <span class="role">Loader</span>
-      </div>
+      <div class="name-item"><span class="marker">✦</span><span class="name">DevName1</span><span class="role">Mods</span></div>
+      <div class="name-item"><span class="marker">✦</span><span class="name">DevName2</span><span class="role">ESP</span></div>
+      <div class="name-item"><span class="marker">✦</span><span class="name">DevName3</span><span class="role">Cosmetics</span></div>
+      <div class="name-item"><span class="marker">✦</span><span class="name">DevName4</span><span class="role">Loader</span></div>
     </div>
   </div>
 
-  <!-- ========== TESTERS ========== -->
   <div class="section">
     <div class="section-title reveal">
       <span class="num">— 03 —</span>
@@ -471,7 +426,6 @@
     </div>
   </div>
 
-  <!-- ========== CONTRIBUTORS ========== -->
   <div class="section">
     <div class="section-title reveal">
       <span class="num">— 04 —</span>
@@ -486,7 +440,6 @@
     </div>
   </div>
 
-  <!-- ========== SPECIAL THANKS ========== -->
   <div class="section">
     <div class="section-title reveal">
       <span class="num">— 05 —</span>
@@ -512,8 +465,8 @@
 </footer>
 
 <script src="theme.js"></script>
+<script src="ui.js"></script>
 <script>
-  // Scroll reveals
   const io = new IntersectionObserver((entries) => {
     entries.forEach(e => {
       if (e.isIntersecting) {

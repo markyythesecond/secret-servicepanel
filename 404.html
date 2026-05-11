@@ -1,0 +1,331 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>404 — Secret Service Panel</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600;900&family=Cormorant+Garamond:ital,wght@0,300;0,400;1,400;1,500&family=JetBrains+Mono:wght@400;700&display=swap');
+
+  :root {
+    --bg: #08070a;
+    --bg-2: #0f0d12;
+    --fg: #ededed;
+    --gray: #8a8590;
+    --muted: rgba(237, 237, 237, 0.5);
+    --accent: #6b3fa0;
+    --accent-2: #9d6cd1;
+    --accent-glow: rgba(107, 63, 160, 0.45);
+    --border: rgba(237, 237, 237, 0.12);
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--bg);
+    color: var(--fg);
+    font-family: 'Cormorant Garamond', serif;
+    overflow-x: hidden;
+    cursor: crosshair;
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    position: relative;
+  }
+
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+    background-image:
+      radial-gradient(circle at 25% 30%, rgba(255,255,255,0.018) 1px, transparent 1px),
+      radial-gradient(circle at 75% 70%, rgba(255,255,255,0.018) 1px, transparent 1px);
+    background-size: 3px 3px, 5px 5px;
+    z-index: 1000;
+    mix-blend-mode: overlay;
+  }
+
+  body::after {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background: radial-gradient(ellipse at 50% 50%, var(--accent-glow), transparent 70%);
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  ::selection { background: var(--accent); color: var(--fg); }
+
+  /* Minimal nav for 404 */
+  nav {
+    position: fixed;
+    top: 0; left: 0; right: 0;
+    padding: 1.5rem 3rem;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    z-index: 100;
+    backdrop-filter: blur(8px);
+    background: rgba(8, 7, 10, 0.5);
+    border-bottom: 1px solid var(--border);
+  }
+  nav .logo {
+    font-family: 'Cinzel', serif;
+    font-weight: 900;
+    font-size: 1.1rem;
+    letter-spacing: 0.4em;
+    color: var(--fg);
+    text-decoration: none;
+  }
+  nav .logo span { color: var(--accent-2); }
+  nav ul { list-style: none; display: flex; gap: 2.5rem; }
+  nav a {
+    color: var(--fg);
+    text-decoration: none;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.7rem;
+    letter-spacing: 0.25em;
+    text-transform: uppercase;
+    opacity: 0.7;
+    transition: all 0.2s;
+  }
+  nav a:hover { opacity: 1; }
+
+  .content {
+    position: relative;
+    z-index: 2;
+    text-align: center;
+    padding: 6rem 2rem 4rem;
+    max-width: 700px;
+  }
+
+  .stamp {
+    display: inline-block;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.7rem;
+    letter-spacing: 0.4em;
+    color: var(--accent-2);
+    border: 1px solid var(--accent);
+    padding: 0.4rem 1.2rem;
+    margin-bottom: 2rem;
+    text-transform: uppercase;
+    transform: rotate(-2deg);
+    animation: stampDrop 0.5s cubic-bezier(0.5, 1.8, 0.6, 1) forwards;
+  }
+
+  @keyframes stampDrop {
+    0% { transform: rotate(-2deg) scale(3); opacity: 0; }
+    60% { transform: rotate(-5deg) scale(1.1); opacity: 1; }
+    100% { transform: rotate(-2deg) scale(1); opacity: 1; }
+  }
+
+  .big-404 {
+    font-family: 'Cinzel', serif;
+    font-size: clamp(7rem, 22vw, 16rem);
+    font-weight: 900;
+    line-height: 0.85;
+    letter-spacing: 0.02em;
+    background: linear-gradient(180deg, var(--fg) 30%, var(--accent) 90%);
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+    margin-bottom: 1.5rem;
+    text-shadow: 0 0 80px var(--accent-glow);
+    position: relative;
+  }
+
+  .big-404 .glitch {
+    position: absolute;
+    inset: 0;
+    color: var(--accent-2);
+    background: none;
+    -webkit-text-fill-color: var(--accent-2);
+    opacity: 0;
+    animation: glitch 4s infinite;
+  }
+
+  @keyframes glitch {
+    0%, 90%, 100% { opacity: 0; transform: translate(0); }
+    91% { opacity: 0.4; transform: translate(-3px, 1px); }
+    92% { opacity: 0.4; transform: translate(3px, -1px); }
+    93% { opacity: 0; }
+  }
+
+  h1 {
+    font-family: 'Cinzel', serif;
+    font-size: clamp(1.5rem, 4vw, 2.5rem);
+    font-weight: 400;
+    letter-spacing: 0.05em;
+    margin-bottom: 1rem;
+  }
+  h1 em {
+    font-family: 'Cormorant Garamond', serif;
+    font-style: italic;
+    font-weight: 300;
+    color: var(--accent-2);
+  }
+
+  p.lede {
+    font-size: 1.2rem;
+    line-height: 1.6;
+    color: var(--gray);
+    font-style: italic;
+    margin-bottom: 2.5rem;
+    max-width: 50ch;
+    margin-left: auto;
+    margin-right: auto;
+  }
+
+  .file-info {
+    background: var(--bg-2);
+    border: 1px solid var(--border);
+    padding: 1.2rem 1.5rem;
+    margin: 0 auto 2.5rem;
+    max-width: 500px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.75rem;
+    text-align: left;
+    line-height: 1.7;
+  }
+  .file-info .row {
+    display: flex;
+    gap: 1rem;
+    border-bottom: 1px dashed var(--border);
+    padding: 0.3rem 0;
+  }
+  .file-info .row:last-child { border-bottom: none; }
+  .file-info .k {
+    color: var(--muted);
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    font-size: 0.65rem;
+    width: 100px;
+    flex-shrink: 0;
+    align-self: center;
+  }
+  .file-info .v {
+    color: var(--accent-2);
+    letter-spacing: 0.05em;
+    word-break: break-all;
+  }
+  .file-info .v.dim { color: var(--gray); }
+
+  .actions {
+    display: flex;
+    gap: 1rem;
+    justify-content: center;
+    flex-wrap: wrap;
+  }
+
+  .btn {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.75rem;
+    letter-spacing: 0.25em;
+    text-transform: uppercase;
+    padding: 1rem 2rem;
+    background: transparent;
+    color: var(--fg);
+    border: 1px solid var(--fg);
+    text-decoration: none;
+    cursor: crosshair;
+    position: relative;
+    overflow: hidden;
+    transition: color 0.3s;
+    z-index: 1;
+  }
+  .btn::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: var(--fg);
+    transform: translateY(100%);
+    transition: transform 0.3s cubic-bezier(0.2, 0, 0, 1);
+    z-index: -1;
+  }
+  .btn:hover { color: var(--bg); }
+  .btn:hover::before { transform: translateY(0); }
+
+  .btn.primary {
+    background: var(--accent);
+    border-color: var(--accent);
+    box-shadow: 0 0 30px var(--accent-glow);
+  }
+  .btn.primary::before { background: var(--accent-2); }
+
+  .signature {
+    margin-top: 3rem;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.65rem;
+    letter-spacing: 0.3em;
+    color: var(--muted);
+    text-transform: uppercase;
+  }
+
+  @media (max-width: 600px) {
+    nav { padding: 1rem 1.5rem; }
+    nav ul { gap: 1.2rem; }
+    .content { padding: 7rem 1.5rem 3rem; }
+    .file-info .row { flex-direction: column; gap: 0.2rem; }
+    .file-info .k { width: auto; }
+  }
+</style>
+</head>
+<body>
+
+<nav>
+  <a href="index.html" class="logo">S<span>·</span>S<span>·</span>P</a>
+  <ul>
+    <li><a href="index.html#features">Features</a></li>
+    <li><a href="database.html">Database</a></li>
+    <li><a href="credits.html">Credits</a></li>
+    <li><a href="terminal.html">Terminal</a></li>
+  </ul>
+</nav>
+
+<div class="content">
+  <div class="stamp">✦ FILE REDACTED ✦</div>
+  <div class="big-404">
+    404
+    <span class="glitch">404</span>
+  </div>
+  <h1>Page <em>not found.</em></h1>
+  <p class="lede">The file you're looking for has been moved, destroyed, or never existed. Either way — you didn't see anything.</p>
+
+  <div class="file-info">
+    <div class="row">
+      <span class="k">Status</span>
+      <span class="v">404 · NOT FOUND</span>
+    </div>
+    <div class="row">
+      <span class="k">Requested</span>
+      <span class="v dim" id="req">—</span>
+    </div>
+    <div class="row">
+      <span class="k">Clearance</span>
+      <span class="v">INSUFFICIENT</span>
+    </div>
+    <div class="row">
+      <span class="k">Action</span>
+      <span class="v dim">Return to a known location</span>
+    </div>
+  </div>
+
+  <div class="actions">
+    <a href="index.html" class="btn primary">↺ Return home</a>
+    <a href="terminal.html" class="btn">▸ Open terminal</a>
+  </div>
+
+  <div class="signature">— S.S.P. · MMXXVI · EYES ONLY —</div>
+</div>
+
+<script src="theme.js"></script>
+<script src="ui.js"></script>
+<script>
+  // Show the URL the user tried to reach
+  const req = document.getElementById('req');
+  req.textContent = window.location.pathname + (window.location.search || '');
+</script>
+
+</body>
+</html>

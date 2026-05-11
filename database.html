@@ -79,12 +79,7 @@
     opacity: 0.7;
     transition: all 0.2s;
   }
-  nav a::before {
-    content: '✦ ';
-    color: var(--accent-2);
-    opacity: 0;
-    transition: opacity 0.2s;
-  }
+  nav a::before { content: '✦ '; color: var(--accent-2); opacity: 0; transition: opacity 0.2s; }
   nav a:hover { opacity: 1; }
   nav a:hover::before, nav a.active::before { opacity: 1; }
   nav a.active { opacity: 1; color: var(--accent-2); }
@@ -95,7 +90,6 @@
     position: relative;
     overflow: hidden;
   }
-
   .header::after {
     content: '';
     position: absolute;
@@ -104,7 +98,6 @@
     pointer-events: none;
     z-index: 0;
   }
-
   .header-inner { position: relative; z-index: 1; }
 
   .eyebrow {
@@ -146,11 +139,7 @@
     padding: 0 3rem 2rem;
   }
 
-  .search-wrap {
-    position: relative;
-    margin-bottom: 1.5rem;
-  }
-
+  .search-wrap { position: relative; margin-bottom: 1.5rem; }
   .search-wrap::before {
     content: '⌕';
     position: absolute;
@@ -237,7 +226,6 @@
     padding-top: 1rem;
     border-top: 1px solid var(--border);
   }
-
   .result-count .count { color: var(--accent-2); }
 
   .table-section {
@@ -394,6 +382,7 @@
     <li><a href="index.html#features">Features</a></li>
     <li><a href="database.html" class="active">Database</a></li>
     <li><a href="credits.html">Credits</a></li>
+    <li><a href="terminal.html">Terminal</a></li>
     <li><a href="index.html#download">Download</a></li>
     <li><a href="#">Discord</a></li>
   </ul>
@@ -458,6 +447,7 @@
 </footer>
 
 <script src="theme.js"></script>
+<script src="ui.js"></script>
 <script>
 const data = [
   {"name":"UNKNOWN","creator":"PineConeLOL","id":"916949553842BB2F"},

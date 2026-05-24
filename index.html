@@ -3,217 +3,116 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>View Count — Tracker</title>
+<title>View Count</title>
 <style>
   @import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600;900&family=Cormorant+Garamond:ital,wght@0,300;0,400;1,400;1,500&family=JetBrains+Mono:wght@400;700&display=swap');
-
   :root {
-    --bg: #08070a;
-    --bg-2: #0f0d12;
-    --bg-3: #15101c;
-    --fg: #ededed;
-    --gray: #8a8590;
-    --muted: rgba(237, 237, 237, 0.5);
-    --accent: #6b3fa0;
-    --accent-2: #9d6cd1;
-    --accent-glow: rgba(107, 63, 160, 0.45);
-    --border: rgba(237, 237, 237, 0.12);
-    --green: #3dd676;
-    --red: #d63a3a;
+    --bg:#08070a; --bg-2:#0f0d12; --bg-3:#15101c; --fg:#ededed; --gray:#8a8590;
+    --muted:rgba(237,237,237,0.5); --accent:#6b3fa0; --accent-2:#9d6cd1;
+    --accent-glow:rgba(107,63,160,0.45); --border:rgba(237,237,237,0.12);
+    --green:#3dd676; --red:#d63a3a;
   }
-  * { box-sizing: border-box; margin: 0; padding: 0; }
-  html { scroll-behavior: smooth; }
-  body {
-    background: var(--bg); color: var(--fg);
-    font-family: 'Cormorant Garamond', serif;
-    overflow-x: hidden; cursor: crosshair; min-height: 100vh;
-  }
-  body::before {
-    content: ''; position: fixed; inset: 0; pointer-events: none;
-    background-image:
-      radial-gradient(circle at 25% 30%, rgba(255,255,255,0.018) 1px, transparent 1px),
-      radial-gradient(circle at 75% 70%, rgba(255,255,255,0.018) 1px, transparent 1px);
-    background-size: 3px 3px, 5px 5px; z-index: 1000; mix-blend-mode: overlay;
-  }
-  ::selection { background: var(--accent); color: var(--fg); }
+  * { box-sizing:border-box; margin:0; padding:0; }
+  html { scroll-behavior:smooth; }
+  body { background:var(--bg); color:var(--fg); font-family:'Cormorant Garamond',serif; overflow-x:hidden; cursor:crosshair; min-height:100vh; }
+  body::before { content:''; position:fixed; inset:0; pointer-events:none;
+    background-image: radial-gradient(circle at 25% 30%, rgba(255,255,255,0.018) 1px, transparent 1px), radial-gradient(circle at 75% 70%, rgba(255,255,255,0.018) 1px, transparent 1px);
+    background-size:3px 3px,5px 5px; z-index:1000; mix-blend-mode:overlay; }
+  ::selection { background:var(--accent); color:var(--fg); }
 
-  nav {
-    position: fixed; top: 0; left: 0; right: 0; padding: 1.5rem 3rem;
-    display: flex; justify-content: space-between; align-items: center;
-    z-index: 100; backdrop-filter: blur(8px);
-    background: rgba(8, 7, 10, 0.6); border-bottom: 1px solid var(--border);
-  }
-  nav .logo {
-    font-family: 'Cinzel', serif; font-weight: 900; font-size: 1.1rem;
-    letter-spacing: 0.3em; color: var(--fg); text-decoration: none;
-  }
-  nav .logo span { color: var(--accent-2); }
-  nav .api-status {
-    display: flex; align-items: center; gap: 0.5rem; padding: 0.35rem 0.7rem;
-    border: 1px solid var(--border); cursor: crosshair; transition: all 0.2s;
-    font-family: 'JetBrains Mono', monospace; font-size: 0.65rem;
-    letter-spacing: 0.2em; text-transform: uppercase; color: var(--muted);
-  }
-  nav .api-status:hover { border-color: var(--accent-2); color: var(--fg); }
-  nav .api-status .dot {
-    width: 7px; height: 7px; border-radius: 50%;
-    background: var(--red); box-shadow: 0 0 8px var(--red);
-  }
-  nav .api-status.live .dot { background: var(--green); box-shadow: 0 0 8px var(--green); }
+  nav { position:fixed; top:0; left:0; right:0; padding:1.5rem 3rem; display:flex; justify-content:space-between; align-items:center; z-index:100; backdrop-filter:blur(8px); background:rgba(8,7,10,0.6); border-bottom:1px solid var(--border); }
+  nav .logo { font-family:'Cinzel',serif; font-weight:900; font-size:1.1rem; letter-spacing:0.3em; color:var(--fg); text-decoration:none; }
+  nav .logo span { color:var(--accent-2); }
+  nav .live-badge { display:flex; align-items:center; gap:0.5rem; padding:0.35rem 0.7rem; border:1px solid var(--border); font-family:'JetBrains Mono',monospace; font-size:0.65rem; letter-spacing:0.2em; text-transform:uppercase; color:var(--muted); }
+  nav .live-badge .dot { width:7px; height:7px; border-radius:50%; background:var(--green); box-shadow:0 0 8px var(--green); animation:blink 2s ease-in-out infinite; }
+  nav .live-badge.offline .dot { background:var(--gray); box-shadow:none; animation:none; }
+  @keyframes blink { 0%,100%{opacity:1;} 50%{opacity:0.4;} }
 
-  .hero { padding: 10rem 3rem 3rem; text-align: center; position: relative; overflow: hidden; }
-  .hero::after {
-    content: ''; position: absolute; inset: 0;
-    background: radial-gradient(ellipse at 50% 0%, var(--accent-glow), transparent 65%);
-    pointer-events: none;
-  }
-  .hero-inner { position: relative; z-index: 1; }
-  .eyebrow {
-    font-family: 'JetBrains Mono', monospace; font-size: 0.7rem; letter-spacing: 0.4em;
-    color: var(--accent-2); text-transform: uppercase; margin-bottom: 1.5rem;
-  }
-  .total-number {
-    font-family: 'Cinzel', serif; font-size: clamp(4rem, 16vw, 12rem); font-weight: 900;
-    line-height: 0.9; letter-spacing: -0.02em;
-    background: linear-gradient(180deg, var(--fg) 30%, var(--accent) 100%);
-    -webkit-background-clip: text; background-clip: text; color: transparent;
-    text-shadow: 0 0 80px var(--accent-glow); font-variant-numeric: tabular-nums;
-  }
-  .total-label { font-family: 'Cormorant Garamond', serif; font-style: italic; font-size: 1.4rem; color: var(--gray); margin-top: 0.5rem; }
+  .hero { padding:10rem 3rem 3rem; text-align:center; position:relative; overflow:hidden; }
+  .hero::after { content:''; position:absolute; inset:0; background:radial-gradient(ellipse at 50% 0%, var(--accent-glow), transparent 65%); pointer-events:none; }
+  .hero-inner { position:relative; z-index:1; }
+  .eyebrow { font-family:'JetBrains Mono',monospace; font-size:0.7rem; letter-spacing:0.4em; color:var(--accent-2); text-transform:uppercase; margin-bottom:1.5rem; }
+  .total-number { font-family:'Cinzel',serif; font-size:clamp(4rem,16vw,12rem); font-weight:900; line-height:0.9; letter-spacing:-0.02em; background:linear-gradient(180deg, var(--fg) 30%, var(--accent) 100%); -webkit-background-clip:text; background-clip:text; color:transparent; text-shadow:0 0 80px var(--accent-glow); font-variant-numeric:tabular-nums; }
+  .total-label { font-family:'Cormorant Garamond',serif; font-style:italic; font-size:1.4rem; color:var(--gray); margin-top:0.5rem; }
+  .stats { display:flex; justify-content:center; gap:3rem; margin-top:3rem; flex-wrap:wrap; }
+  .stat { text-align:center; }
+  .stat .num { font-family:'Cinzel',serif; font-size:2rem; color:var(--accent-2); line-height:1; font-variant-numeric:tabular-nums; }
+  .stat .label { font-family:'JetBrains Mono',monospace; font-size:0.6rem; letter-spacing:0.2em; color:var(--muted); text-transform:uppercase; margin-top:0.5rem; }
 
-  .stats { display: flex; justify-content: center; gap: 3rem; margin-top: 3rem; flex-wrap: wrap; }
-  .stat { text-align: center; }
-  .stat .num { font-family: 'Cinzel', serif; font-size: 2rem; color: var(--accent-2); line-height: 1; font-variant-numeric: tabular-nums; }
-  .stat .label { font-family: 'JetBrains Mono', monospace; font-size: 0.6rem; letter-spacing: 0.2em; color: var(--muted); text-transform: uppercase; margin-top: 0.5rem; }
+  .conveyor-section { margin:3rem 0 1rem; position:relative; overflow:hidden; padding:1.5rem 0; border-top:1px solid var(--border); border-bottom:1px solid var(--border); }
+  .conveyor-label { text-align:center; font-family:'JetBrains Mono',monospace; font-size:0.6rem; letter-spacing:0.3em; text-transform:uppercase; color:var(--muted); margin-bottom:1.2rem; }
+  .belt-track { position:relative; overflow:hidden; width:100%; -webkit-mask-image:linear-gradient(90deg, transparent, black 8%, black 92%, transparent); mask-image:linear-gradient(90deg, transparent, black 8%, black 92%, transparent); }
+  .belt-line { position:absolute; bottom:0; left:0; right:0; height:2px; background:repeating-linear-gradient(90deg, var(--accent) 0, var(--accent) 20px, transparent 20px, transparent 40px); background-size:40px 2px; animation:beltMove 1s linear infinite; opacity:0.4; }
+  @keyframes beltMove { from{background-position:0 0;} to{background-position:40px 0;} }
+  .belt { display:flex; gap:1.2rem; width:max-content; padding:0 8%; animation:conveyor 40s linear infinite; }
+  .belt:hover { animation-play-state:paused; }
+  @keyframes conveyor { from{transform:translateX(0);} to{transform:translateX(-50%);} }
+  .belt-card { flex:0 0 auto; width:180px; background:var(--bg-2); border:1px solid var(--border); overflow:hidden; transition:all 0.2s; text-decoration:none; }
+  .belt-card:hover { border-color:var(--accent-2); box-shadow:0 0 20px var(--accent-glow); transform:translateY(-4px); }
+  .belt-card .thumb { width:100%; aspect-ratio:9/16; object-fit:cover; display:block; background:var(--bg-3); }
+  .belt-card .bc-body { padding:0.6rem 0.7rem; }
+  .belt-card .bc-title { font-family:'Cinzel',serif; font-size:0.7rem; letter-spacing:0.03em; color:var(--fg); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; margin-bottom:0.3rem; }
+  .belt-card .bc-views { font-family:'JetBrains Mono',monospace; font-size:0.75rem; color:var(--accent-2); letter-spacing:0.05em; }
+  .belt-card .bc-views .lbl { font-size:0.55rem; color:var(--muted); text-transform:uppercase; letter-spacing:0.15em; display:block; margin-top:0.1rem; }
+  .belt-empty { text-align:center; padding:3rem; font-family:'Cormorant Garamond',serif; font-style:italic; color:var(--gray); font-size:1.1rem; width:100%; }
 
-  .input-section { max-width: 800px; margin: 0 auto; padding: 2rem 3rem; }
-  .input-row { display: flex; gap: 0.7rem; }
-  .input-row input {
-    flex: 1; background: var(--bg-2); border: 1px solid var(--border); color: var(--fg);
-    padding: 1.1rem 1.3rem; font-family: 'JetBrains Mono', monospace; font-size: 0.85rem;
-    letter-spacing: 0.03em; outline: none; transition: all 0.2s; cursor: text;
-  }
-  .input-row input::placeholder { color: var(--muted); text-transform: uppercase; letter-spacing: 0.15em; font-size: 0.75rem; }
-  .input-row input:focus { border-color: var(--accent); box-shadow: 0 0 30px var(--accent-glow); background: var(--bg-3); }
-  .btn {
-    font-family: 'JetBrains Mono', monospace; font-size: 0.75rem; letter-spacing: 0.2em;
-    text-transform: uppercase; padding: 1.1rem 1.8rem; background: var(--accent); color: var(--fg);
-    border: 1px solid var(--accent); cursor: crosshair; transition: all 0.2s;
-    box-shadow: 0 0 20px var(--accent-glow); white-space: nowrap;
-  }
-  .btn:hover { background: var(--accent-2); border-color: var(--accent-2); }
-  .btn:active { transform: translateY(1px); }
-  .input-hint {
-    margin-top: 0.8rem; font-family: 'JetBrains Mono', monospace; font-size: 0.65rem;
-    letter-spacing: 0.1em; color: var(--muted); display: flex; justify-content: space-between;
-    flex-wrap: wrap; gap: 0.5rem;
-  }
-  .input-hint a { color: var(--accent-2); text-decoration: underline; text-underline-offset: 3px; cursor: crosshair; }
-  .input-hint .err { color: var(--red); }
+  .chart-section { max-width:1000px; margin:0 auto; padding:3rem; }
+  .section-head { display:flex; align-items:center; gap:1.5rem; margin-bottom:2rem; }
+  .section-head h2 { font-family:'Cinzel',serif; font-size:1.4rem; font-weight:600; letter-spacing:0.2em; text-transform:uppercase; color:var(--accent-2); flex-shrink:0; }
+  .section-head hr { flex:1; border:none; border-top:1px solid var(--border); }
+  .bar-row { margin-bottom:1.3rem; animation:fadeIn 0.5s ease; }
+  @keyframes fadeIn { from{opacity:0; transform:translateX(-20px);} to{opacity:1; transform:translateX(0);} }
+  .bar-head { display:flex; justify-content:space-between; align-items:baseline; margin-bottom:0.4rem; }
+  .bar-title { font-family:'Cinzel',serif; font-size:0.9rem; letter-spacing:0.05em; color:var(--fg); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:70%; display:flex; align-items:center; gap:0.6rem; }
+  .bar-title .rank { font-family:'JetBrains Mono',monospace; font-size:0.65rem; color:var(--accent-2); flex-shrink:0; }
+  .bar-value { font-family:'JetBrains Mono',monospace; font-size:0.85rem; color:var(--accent-2); font-variant-numeric:tabular-nums; flex-shrink:0; }
+  .bar-value .pct { color:var(--muted); font-size:0.65rem; margin-left:0.5rem; }
+  .bar-track { height:26px; background:var(--bg-2); border:1px solid var(--border); position:relative; overflow:hidden; }
+  .bar-fill { height:100%; width:0; background:linear-gradient(90deg, var(--accent), var(--accent-2)); box-shadow:0 0 20px var(--accent-glow); transition:width 1.2s cubic-bezier(0.2,0,0,1); position:relative; }
+  .bar-fill::after { content:''; position:absolute; top:0; right:0; bottom:0; width:30px; background:linear-gradient(90deg, transparent, rgba(255,255,255,0.25)); }
+  .empty-state { text-align:center; padding:4rem 2rem; border:1px dashed var(--border); font-family:'Cormorant Garamond',serif; font-style:italic; color:var(--gray); font-size:1.2rem; }
 
-  .conveyor-section {
-    margin: 2rem 0 1rem; position: relative; overflow: hidden; padding: 1.5rem 0;
-    border-top: 1px solid var(--border); border-bottom: 1px solid var(--border);
-  }
-  .conveyor-label { text-align: center; font-family: 'JetBrains Mono', monospace; font-size: 0.6rem; letter-spacing: 0.3em; text-transform: uppercase; color: var(--muted); margin-bottom: 1.2rem; }
-  .belt-track { position: relative; overflow: hidden; width: 100%;
-    -webkit-mask-image: linear-gradient(90deg, transparent, black 8%, black 92%, transparent);
-    mask-image: linear-gradient(90deg, transparent, black 8%, black 92%, transparent);
-  }
-  .belt-line {
-    position: absolute; bottom: 0; left: 0; right: 0; height: 2px;
-    background: repeating-linear-gradient(90deg, var(--accent) 0, var(--accent) 20px, transparent 20px, transparent 40px);
-    background-size: 40px 2px; animation: beltMove 1s linear infinite; opacity: 0.4;
-  }
-  @keyframes beltMove { from { background-position: 0 0; } to { background-position: 40px 0; } }
-  .belt { display: flex; gap: 1.2rem; width: max-content; padding: 0 8%; animation: conveyor 40s linear infinite; }
-  .belt:hover { animation-play-state: paused; }
-  @keyframes conveyor { from { transform: translateX(0); } to { transform: translateX(-50%); } }
-  .belt-card { flex: 0 0 auto; width: 180px; background: var(--bg-2); border: 1px solid var(--border); overflow: hidden; transition: all 0.2s; position: relative; }
-  .belt-card:hover { border-color: var(--accent-2); box-shadow: 0 0 20px var(--accent-glow); transform: translateY(-4px); }
-  .belt-card .thumb { width: 100%; aspect-ratio: 9 / 16; object-fit: cover; display: block; background: var(--bg-3); }
-  .belt-card .bc-body { padding: 0.6rem 0.7rem; }
-  .belt-card .bc-title { font-family: 'Cinzel', serif; font-size: 0.7rem; letter-spacing: 0.03em; color: var(--fg); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-bottom: 0.3rem; }
-  .belt-card .bc-views { font-family: 'JetBrains Mono', monospace; font-size: 0.75rem; color: var(--accent-2); letter-spacing: 0.05em; }
-  .belt-card .bc-views .lbl { font-size: 0.55rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.15em; display: block; margin-top: 0.1rem; }
-  .belt-empty { text-align: center; padding: 3rem; font-family: 'Cormorant Garamond', serif; font-style: italic; color: var(--gray); font-size: 1.1rem; width: 100%; }
+  .goal-section { max-width:1000px; margin:0 auto; padding:0 3rem 4rem; }
+  .goal-box { background:var(--bg-2); border:1px solid var(--border); padding:2rem; }
+  .goal-top { display:flex; justify-content:space-between; align-items:baseline; margin-bottom:1rem; flex-wrap:wrap; gap:1rem; }
+  .goal-top .gt-label { font-family:'JetBrains Mono',monospace; font-size:0.65rem; letter-spacing:0.25em; text-transform:uppercase; color:var(--muted); }
+  .goal-top .gt-target { font-family:'JetBrains Mono',monospace; font-size:0.8rem; color:var(--accent-2); }
+  .goal-bar-track { height:30px; background:var(--bg-3); border:1px solid var(--border); position:relative; overflow:hidden; }
+  .goal-bar-fill { height:100%; width:0; background:linear-gradient(90deg, var(--accent), var(--accent-2)); box-shadow:0 0 20px var(--accent-glow); transition:width 1.5s cubic-bezier(0.2,0,0,1); }
+  .goal-pct { text-align:center; margin-top:1rem; font-family:'Cinzel',serif; font-size:1.5rem; color:var(--accent-2); }
+  .goal-pct span { color:var(--gray); font-size:0.9rem; font-family:'Cormorant Garamond',serif; font-style:italic; }
 
-  .chart-section { max-width: 1000px; margin: 0 auto; padding: 3rem; }
-  .section-head { display: flex; align-items: center; gap: 1.5rem; margin-bottom: 2rem; }
-  .section-head h2 { font-family: 'Cinzel', serif; font-size: 1.4rem; font-weight: 600; letter-spacing: 0.2em; text-transform: uppercase; color: var(--accent-2); flex-shrink: 0; }
-  .section-head hr { flex: 1; border: none; border-top: 1px solid var(--border); }
-  .section-head .controls { display: flex; gap: 0.5rem; }
-  .sort-btn { background: transparent; border: 1px solid var(--border); color: var(--gray); padding: 0.4rem 0.8rem; font-family: 'JetBrains Mono', monospace; font-size: 0.6rem; letter-spacing: 0.15em; text-transform: uppercase; cursor: crosshair; transition: all 0.2s; }
-  .sort-btn:hover { color: var(--fg); border-color: var(--gray); }
-  .sort-btn.active { background: var(--accent); color: var(--fg); border-color: var(--accent); }
+  footer { padding:3rem; border-top:1px solid var(--border); display:flex; justify-content:space-between; flex-wrap:wrap; gap:1rem; font-family:'JetBrains Mono',monospace; font-size:0.7rem; letter-spacing:0.15em; color:var(--gray); text-transform:uppercase; }
 
-  .bar-row { margin-bottom: 1.3rem; animation: fadeIn 0.5s ease; }
-  @keyframes fadeIn { from { opacity: 0; transform: translateX(-20px); } to { opacity: 1; transform: translateX(0); } }
-  .bar-head { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 0.4rem; }
-  .bar-title { font-family: 'Cinzel', serif; font-size: 0.9rem; letter-spacing: 0.05em; color: var(--fg); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 70%; display: flex; align-items: center; gap: 0.6rem; }
-  .bar-title .rank { font-family: 'JetBrains Mono', monospace; font-size: 0.65rem; color: var(--accent-2); flex-shrink: 0; }
-  .bar-title .remove { color: var(--muted); cursor: crosshair; font-size: 0.8rem; transition: color 0.2s; flex-shrink: 0; }
-  .bar-title .remove:hover { color: var(--red); }
-  .bar-value { font-family: 'JetBrains Mono', monospace; font-size: 0.85rem; color: var(--accent-2); font-variant-numeric: tabular-nums; flex-shrink: 0; }
-  .bar-value .pct { color: var(--muted); font-size: 0.65rem; margin-left: 0.5rem; }
-  .bar-track { height: 26px; background: var(--bg-2); border: 1px solid var(--border); position: relative; overflow: hidden; }
-  .bar-fill { height: 100%; width: 0; background: linear-gradient(90deg, var(--accent), var(--accent-2)); box-shadow: 0 0 20px var(--accent-glow); transition: width 1.2s cubic-bezier(0.2, 0, 0, 1); position: relative; }
-  .bar-fill::after { content: ''; position: absolute; top: 0; right: 0; bottom: 0; width: 30px; background: linear-gradient(90deg, transparent, rgba(255,255,255,0.25)); }
-  .empty-state { text-align: center; padding: 4rem 2rem; border: 1px dashed var(--border); font-family: 'Cormorant Garamond', serif; font-style: italic; color: var(--gray); font-size: 1.2rem; }
-
-  .goal-section { max-width: 1000px; margin: 0 auto; padding: 0 3rem 4rem; }
-  .goal-box { background: var(--bg-2); border: 1px solid var(--border); padding: 2rem; }
-  .goal-top { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 1rem; flex-wrap: wrap; gap: 1rem; }
-  .goal-top .gt-label { font-family: 'JetBrains Mono', monospace; font-size: 0.65rem; letter-spacing: 0.25em; text-transform: uppercase; color: var(--muted); }
-  .goal-top .gt-input { background: var(--bg-3); border: 1px solid var(--border); color: var(--accent-2); padding: 0.4rem 0.7rem; font-family: 'JetBrains Mono', monospace; font-size: 0.8rem; width: 140px; outline: none; cursor: text; }
-  .goal-top .gt-input:focus { border-color: var(--accent); }
-  .goal-bar-track { height: 30px; background: var(--bg-3); border: 1px solid var(--border); position: relative; overflow: hidden; }
-  .goal-bar-fill { height: 100%; width: 0; background: linear-gradient(90deg, var(--accent), var(--accent-2)); box-shadow: 0 0 20px var(--accent-glow); transition: width 1.5s cubic-bezier(0.2, 0, 0, 1); }
-  .goal-pct { text-align: center; margin-top: 1rem; font-family: 'Cinzel', serif; font-size: 1.5rem; color: var(--accent-2); }
-  .goal-pct span { color: var(--gray); font-size: 0.9rem; font-family: 'Cormorant Garamond', serif; font-style: italic; }
-
-  footer { padding: 3rem; border-top: 1px solid var(--border); display: flex; justify-content: space-between; flex-wrap: wrap; gap: 1rem; font-family: 'JetBrains Mono', monospace; font-size: 0.7rem; letter-spacing: 0.15em; color: var(--gray); text-transform: uppercase; }
-
-  .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.7); backdrop-filter: blur(4px); z-index: 9000; display: none; align-items: center; justify-content: center; padding: 2rem; }
-  .modal-overlay.open { display: flex; }
-  .modal { background: var(--bg-2); border: 1px solid var(--accent); box-shadow: 0 0 60px var(--accent-glow); max-width: 520px; width: 100%; padding: 2rem; }
-  .modal h3 { font-family: 'Cinzel', serif; font-size: 1.3rem; letter-spacing: 0.1em; margin-bottom: 1rem; color: var(--accent-2); }
-  .modal p { font-size: 1rem; line-height: 1.6; color: var(--gray); margin-bottom: 1rem; }
-  .modal ol { color: var(--gray); font-size: 0.95rem; line-height: 1.7; padding-left: 1.5rem; margin-bottom: 1.5rem; }
-  .modal ol a { color: var(--accent-2); }
-  .modal input { width: 100%; background: var(--bg-3); border: 1px solid var(--border); color: var(--fg); padding: 0.9rem 1rem; font-family: 'JetBrains Mono', monospace; font-size: 0.8rem; outline: none; margin-bottom: 1rem; cursor: text; }
-  .modal input:focus { border-color: var(--accent); }
-  .modal-actions { display: flex; gap: 0.7rem; justify-content: flex-end; }
-  .modal-actions .btn-ghost { background: transparent; border: 1px solid var(--border); color: var(--gray); padding: 0.8rem 1.4rem; font-family: 'JetBrains Mono', monospace; font-size: 0.7rem; letter-spacing: 0.2em; text-transform: uppercase; cursor: crosshair; transition: all 0.2s; }
-  .modal-actions .btn-ghost:hover { color: var(--fg); border-color: var(--gray); }
-
-  .toast { position: fixed; bottom: 2rem; left: 50%; transform: translateX(-50%) translateY(20px); background: var(--bg-2); border: 1px solid var(--accent); color: var(--accent-2); padding: 0.8rem 1.5rem; font-family: 'JetBrains Mono', monospace; font-size: 0.7rem; letter-spacing: 0.2em; text-transform: uppercase; z-index: 9998; opacity: 0; transition: all 0.3s; box-shadow: 0 0 30px var(--accent-glow); pointer-events: none; }
-  .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
-  .toast.err { border-color: var(--red); color: var(--red); }
-
-  @media (max-width: 700px) {
-    nav { padding: 1rem 1.5rem; }
-    .hero { padding: 8rem 1.5rem 2rem; }
-    .input-section, .chart-section, .goal-section { padding-left: 1.5rem; padding-right: 1.5rem; }
-    .stats { gap: 1.5rem; }
-    .input-row { flex-direction: column; }
-    footer { padding: 2rem 1.5rem; }
+  @media (max-width:700px) {
+    nav { padding:1rem 1.5rem; }
+    .hero { padding:8rem 1.5rem 2rem; }
+    .chart-section, .goal-section { padding-left:1.5rem; padding-right:1.5rem; }
+    .stats { gap:1.5rem; }
+    footer { padding:2rem 1.5rem; }
   }
 </style>
 </head>
 <body>
 
+<!-- ============================================================= -->
+<!--  EDIT THESE TWO THINGS:                                       -->
+<!--  1. API_KEY  - your YouTube Data API key (restrict it!)       -->
+<!--  2. VIDEO_IDS - your list of Shorts IDs (the part after       -->
+<!--     /shorts/ in the URL). Add as many as you want.            -->
+<!-- ============================================================= -->
+
 <nav>
   <a href="index.html" class="logo">VIEW<span>·</span>COUNT</a>
-  <div class="api-status" id="apiStatus" title="Set up YouTube API key">
+  <div class="live-badge offline" id="liveBadge">
     <span class="dot"></span>
-    <span id="apiStatusText">MANUAL MODE</span>
+    <span id="liveText">LOADING</span>
   </div>
 </nav>
 
 <section class="hero">
   <div class="hero-inner">
-    <div class="eyebrow">&#10022; TOTAL VIEWS ACROSS ALL SHORTS</div>
+    <div class="eyebrow" id="eyebrow">&#10022; MY TOTAL VIEWS ACROSS ALL SHORTS</div>
     <div class="total-number" id="totalNumber">0</div>
     <div class="total-label">views and counting.</div>
     <div class="stats">
@@ -224,44 +123,24 @@
   </div>
 </section>
 
-<section class="input-section">
-  <div class="input-row">
-    <input type="text" id="urlInput" placeholder="Paste a YouTube Shorts link..." autocomplete="off" spellcheck="false">
-    <button class="btn" id="addBtn">+ Add</button>
-  </div>
-  <div class="input-hint">
-    <span>Works with youtube.com/shorts/... &middot; youtu.be/... &middot; full watch links</span>
-    <span><a id="setupApiLink">&#9881; Set up live view counts</a></span>
-  </div>
-  <div class="input-hint" id="errHint" style="display:none;"><span class="err" id="errText"></span></div>
-</section>
-
 <section class="conveyor-section">
-  <div class="conveyor-label">&mdash; INCOMING &middot; LIVE FEED &mdash;</div>
+  <div class="conveyor-label">&mdash; LIVE FEED &mdash;</div>
   <div class="belt-track">
-    <div class="belt" id="belt"></div>
+    <div class="belt" id="belt"><div class="belt-empty">&mdash; loading videos &mdash;</div></div>
     <div class="belt-line"></div>
   </div>
 </section>
 
 <section class="chart-section">
-  <div class="section-head">
-    <h2>Breakdown</h2>
-    <hr>
-    <div class="controls">
-      <button class="sort-btn active" data-sort="added">Added</button>
-      <button class="sort-btn" data-sort="high">High &rarr; Low</button>
-      <button class="sort-btn" data-sort="low">Low &rarr; High</button>
-    </div>
-  </div>
-  <div id="barChart"><div class="empty-state" id="emptyState">No videos yet. Paste a Shorts link above to begin.</div></div>
+  <div class="section-head"><h2>Breakdown</h2><hr></div>
+  <div id="barChart"><div class="empty-state">Loading view counts...</div></div>
 </section>
 
 <section class="goal-section">
   <div class="goal-box">
     <div class="goal-top">
       <span class="gt-label">Goal Tracker</span>
-      <div><span class="gt-label" style="margin-right:0.5rem;">Target:</span><input type="text" class="gt-input" id="goalInput" value="1000000"></div>
+      <span class="gt-target">TARGET: <span id="goalTargetLabel">1M</span></span>
     </div>
     <div class="goal-bar-track"><div class="goal-bar-fill" id="goalBarFill"></div></div>
     <div class="goal-pct" id="goalPct">0% <span>of goal reached</span></div>
@@ -269,179 +148,151 @@
 </section>
 
 <footer>
-  <span>&copy; View Count Tracker</span>
-  <span id="apiFooter">Manual mode &middot; add API key for live data</span>
-  <span>Data lives in this session</span>
+  <span>&copy; View Count</span>
+  <span id="updatedLabel">&mdash;</span>
+  <span>Powered by YouTube Data API</span>
 </footer>
 
-<div class="modal-overlay" id="modal">
-  <div class="modal">
-    <h3>Live view counts</h3>
-    <p>To pull real view counts automatically, you need a free YouTube Data API key from Google. Takes about 3 minutes:</p>
-    <ol>
-      <li>Go to <a href="https://console.cloud.google.com/" target="_blank">console.cloud.google.com</a></li>
-      <li>Create a project (any name)</li>
-      <li>Search "YouTube Data API v3" &rarr; Enable it</li>
-      <li>Go to Credentials &rarr; Create Credentials &rarr; API Key</li>
-      <li>Copy the key and paste it below</li>
-    </ol>
-    <input type="text" id="apiKeyInput" placeholder="Paste your API key here..." autocomplete="off" spellcheck="false">
-    <div class="modal-actions">
-      <button class="btn-ghost" id="clearKeyBtn">Use Manual</button>
-      <button class="btn" id="saveKeyBtn">Save &amp; Go Live</button>
-    </div>
-  </div>
-</div>
-
-<div class="toast" id="toast"></div>
-
 <script>
-let videos = [];
-let sortMode = 'added';
-let apiKey = '';
+// ============================================================
+// CONFIG - EDIT THESE
+// ============================================================
+
+// 1) Your YouTube Data API key. Get it from console.cloud.google.com
+//    IMPORTANT: restrict it to YouTube Data API v3 + your domain.
+const API_KEY = 'PASTE_YOUR_API_KEY_HERE';
+
+// 2) Your video IDs (the part after /shorts/ in the URL).
+//    Example: https://www.youtube.com/shorts/ee8RNlnLntw  ->  'ee8RNlnLntw'
+const VIDEO_IDS = [
+  'ee8RNlnLntw',
+  // 'add', 'more', 'ids', 'here'
+];
+
+// 3) Your view goal
+const GOAL = 1000000;
+
+// ============================================================
+// (no need to edit below this line)
+// ============================================================
 
 const $ = id => document.getElementById(id);
-const toast = $('toast');
-let toastTimer;
-function showToast(msg, isErr) {
-  toast.textContent = msg;
-  toast.classList.toggle('err', !!isErr);
-  toast.classList.add('show');
-  clearTimeout(toastTimer);
-  toastTimer = setTimeout(() => toast.classList.remove('show'), 2200);
-}
-function formatNum(n) { return n.toLocaleString('en-US'); }
-function formatCompact(n) {
-  if (n >= 1e9) return (n/1e9).toFixed(1).replace(/\.0$/,'') + 'B';
-  if (n >= 1e6) return (n/1e6).toFixed(1).replace(/\.0$/,'') + 'M';
-  if (n >= 1e3) return (n/1e3).toFixed(1).replace(/\.0$/,'') + 'K';
+function formatNum(n){ return n.toLocaleString('en-US'); }
+function formatCompact(n){
+  if(n>=1e9) return (n/1e9).toFixed(1).replace(/\.0$/,'')+'B';
+  if(n>=1e6) return (n/1e6).toFixed(1).replace(/\.0$/,'')+'M';
+  if(n>=1e3) return (n/1e3).toFixed(1).replace(/\.0$/,'')+'K';
   return n.toString();
 }
-function extractId(url) {
-  url = url.trim();
-  const patterns = [
-    /youtube\.com\/shorts\/([A-Za-z0-9_-]{11})/,
-    /youtu\.be\/([A-Za-z0-9_-]{11})/,
-    /youtube\.com\/watch\?v=([A-Za-z0-9_-]{11})/,
-    /youtube\.com\/embed\/([A-Za-z0-9_-]{11})/,
-    /^([A-Za-z0-9_-]{11})$/
-  ];
-  for (const p of patterns) { const m = url.match(p); if (m) return m[1]; }
-  return null;
-}
-function thumbUrl(id) { return 'https://i.ytimg.com/vi/' + id + '/hqdefault.jpg'; }
-function escapeHtml(s) {
-  return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-}
+function thumbUrl(id){ return 'https://i.ytimg.com/vi/'+id+'/hqdefault.jpg'; }
+function escapeHtml(s){ return String(s).replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
 
-async function addVideo(url) {
-  const id = extractId(url);
-  if (!id) { showErr('Could not read a YouTube video ID from that link.'); return; }
-  if (videos.some(v => v.id === id)) { showErr('That video is already added.'); return; }
-  hideErr();
-  const vid = { id, title: 'Loading...', views: 0, thumb: thumbUrl(id) };
-  videos.push(vid);
-  renderAll();
-  if (apiKey) {
-    try {
-      const res = await fetch('https://www.googleapis.com/youtube/v3/videos?part=snippet,statistics&id=' + id + '&key=' + apiKey);
-      const data = await res.json();
-      if (data.error) { showErr('API error: ' + (data.error.message || 'check your key')); vid.title = '(API error)'; renderAll(); return; }
-      if (!data.items || !data.items.length) { showErr('Video not found or is private.'); videos = videos.filter(v => v.id !== id); renderAll(); return; }
-      const item = data.items[0];
-      vid.title = item.snippet.title;
-      vid.views = parseInt(item.statistics.viewCount || '0', 10);
-      showToast('Added: ' + formatCompact(vid.views) + ' views');
-    } catch (e) { showErr('Network error fetching the video.'); vid.title = '(fetch failed)'; }
-  } else {
-    const input = prompt('Live API not set up.\nEnter the view count for this video (numbers only):', '');
-    if (input === null) { videos = videos.filter(v => v.id !== id); renderAll(); return; }
-    const num = parseInt(input.replace(/[^0-9]/g, ''), 10) || 0;
-    vid.views = num;
-    vid.title = 'Short \u00b7 ' + id;
-    showToast('Added: ' + formatCompact(num) + ' views');
+let videos = [];
+
+async function loadVideos(){
+  if(!API_KEY || API_KEY === 'AIzaSyDCDu-orYr3O2wigYzOO94lINKEkOYEEps'){
+    setBadge(false, 'NO API KEY');
+    $('barChart').innerHTML = '<div class="empty-state">Add your YouTube API key in the code to load live counts.<br>Open index.html and replace PASTE_YOUR_API_KEY_HERE.</div>';
+    $('belt').innerHTML = '<div class="belt-empty">&mdash; no API key set &mdash;</div>';
+    $('belt').style.animation = 'none';
+    return;
   }
-  renderAll();
+  if(!VIDEO_IDS.length){
+    setBadge(false, 'NO VIDEOS');
+    return;
+  }
+  try {
+    // API accepts up to 50 ids per call, comma-separated
+    const chunks = [];
+    for(let i=0;i<VIDEO_IDS.length;i+=50) chunks.push(VIDEO_IDS.slice(i,i+50));
+    let items = [];
+    for(const chunk of chunks){
+      const url = 'https://www.googleapis.com/youtube/v3/videos?part=snippet,statistics&id='+chunk.join(',')+'&key='+API_KEY;
+      const res = await fetch(url);
+      const data = await res.json();
+      if(data.error){ setBadge(false, 'API ERROR'); $('barChart').innerHTML = '<div class="empty-state">API error: '+escapeHtml(data.error.message||'check your key')+'</div>'; return; }
+      if(data.items) items = items.concat(data.items);
+    }
+    videos = items.map(it => ({
+      id: it.id,
+      title: it.snippet.title,
+      views: parseInt(it.statistics.viewCount||'0',10),
+      thumb: thumbUrl(it.id)
+    }));
+    setBadge(true, 'LIVE');
+    const now = new Date();
+    $('updatedLabel').textContent = 'Updated ' + now.toLocaleTimeString();
+    renderAll();
+  } catch(e){
+    setBadge(false, 'OFFLINE');
+    $('barChart').innerHTML = '<div class="empty-state">Could not reach the YouTube API.</div>';
+  }
 }
-function removeVideo(id) { videos = videos.filter(v => v.id !== id); showToast('Removed'); renderAll(); }
 
-function getSorted() {
-  const copy = [...videos];
-  if (sortMode === 'high') copy.sort((a,b) => b.views - a.views);
-  else if (sortMode === 'low') copy.sort((a,b) => a.views - b.views);
-  return copy;
+function setBadge(live, text){
+  const b = $('liveBadge');
+  b.classList.toggle('offline', !live);
+  $('liveText').textContent = text;
 }
-function renderAll() { renderTotal(); renderBelt(); renderChart(); renderGoal(); }
 
-let countAnim = null;
-function renderTotal() {
-  const total = videos.reduce((s,v) => s + v.views, 0);
+function renderAll(){ renderTotal(); renderBelt(); renderChart(); renderGoal(); }
+
+let countAnim=null;
+function renderTotal(){
+  const total = videos.reduce((s,v)=>s+v.views,0);
   const el = $('totalNumber');
-  const start = parseInt(el.dataset.current || '0', 10);
-  const target = total, duration = 900, startTime = performance.now();
+  const start = 0, target = total, duration = 1400, startTime = performance.now();
   cancelAnimationFrame(countAnim);
-  function step(now) {
-    const t = Math.min(1, (now - startTime) / duration);
-    const eased = 1 - Math.pow(1 - t, 3);
-    const val = Math.round(start + (target - start) * eased);
-    el.textContent = formatNum(val); el.dataset.current = val;
-    if (t < 1) countAnim = requestAnimationFrame(step);
+  function step(now){
+    const t = Math.min(1,(now-startTime)/duration);
+    const eased = 1-Math.pow(1-t,3);
+    el.textContent = formatNum(Math.round(start+(target-start)*eased));
+    if(t<1) countAnim = requestAnimationFrame(step);
   }
   countAnim = requestAnimationFrame(step);
   $('statVideos').textContent = videos.length;
-  $('statAvg').textContent = videos.length ? formatCompact(Math.round(total / videos.length)) : '0';
-  const top = videos.reduce((b,v) => v.views > (b ? b.views : -1) ? v : b, null);
+  $('statAvg').textContent = videos.length ? formatCompact(Math.round(total/videos.length)) : '0';
+  const top = videos.reduce((b,v)=> v.views>(b?b.views:-1)?v:b, null);
   $('statTop').textContent = top ? formatCompact(top.views) : '\u2014';
 }
-function renderBelt() {
+
+function renderBelt(){
   const belt = $('belt');
-  if (!videos.length) { belt.innerHTML = '<div class="belt-empty">&mdash; belt empty &middot; add a video &mdash;</div>'; belt.style.animation = 'none'; return; }
-  const cards = videos.map(v => '<div class="belt-card" data-id="'+v.id+'"><img class="thumb" src="'+v.thumb+'" alt="" onerror="this.style.opacity=0.2"><div class="bc-body"><div class="bc-title">'+escapeHtml(v.title)+'</div><div class="bc-views">'+formatCompact(v.views)+'<span class="lbl">views</span></div></div></div>').join('');
+  if(!videos.length){ belt.innerHTML='<div class="belt-empty">&mdash; no videos &mdash;</div>'; belt.style.animation='none'; return; }
+  const cards = videos.map(v =>
+    '<a class="belt-card" href="https://www.youtube.com/shorts/'+v.id+'" target="_blank" rel="noopener">'+
+    '<img class="thumb" src="'+v.thumb+'" alt="" onerror="this.style.opacity=0.2">'+
+    '<div class="bc-body"><div class="bc-title">'+escapeHtml(v.title)+'</div>'+
+    '<div class="bc-views">'+formatCompact(v.views)+'<span class="lbl">views</span></div></div></a>'
+  ).join('');
   belt.innerHTML = cards + cards;
-  const dur = Math.max(15, videos.length * 6);
-  belt.style.animation = 'conveyor ' + dur + 's linear infinite';
+  const dur = Math.max(15, videos.length*6);
+  belt.style.animation = 'conveyor '+dur+'s linear infinite';
 }
-function renderChart() {
+
+function renderChart(){
   const chart = $('barChart');
-  if (!videos.length) { chart.innerHTML = '<div class="empty-state">No videos yet. Paste a Shorts link above to begin.</div>'; return; }
-  const sorted = getSorted();
-  const max = Math.max(...videos.map(v => v.views), 1);
-  const total = videos.reduce((s,v) => s + v.views, 0) || 1;
-  chart.innerHTML = sorted.map((v,i) => {
-    const pct = (v.views / max) * 100;
-    const share = ((v.views / total) * 100).toFixed(1);
-    return '<div class="bar-row"><div class="bar-head"><div class="bar-title"><span class="rank">#'+(i+1)+'</span>'+escapeHtml(v.title)+'<span class="remove" data-remove="'+v.id+'" title="Remove">&#10005;</span></div><div class="bar-value">'+formatNum(v.views)+'<span class="pct">'+share+'%</span></div></div><div class="bar-track"><div class="bar-fill" data-pct="'+pct+'"></div></div></div>';
+  if(!videos.length){ chart.innerHTML='<div class="empty-state">No videos.</div>'; return; }
+  const sorted = [...videos].sort((a,b)=>b.views-a.views);
+  const max = Math.max(...videos.map(v=>v.views),1);
+  const total = videos.reduce((s,v)=>s+v.views,0)||1;
+  chart.innerHTML = sorted.map((v,i)=>{
+    const pct = (v.views/max)*100;
+    const share = ((v.views/total)*100).toFixed(1);
+    return '<div class="bar-row"><div class="bar-head"><div class="bar-title"><span class="rank">#'+(i+1)+'</span>'+escapeHtml(v.title)+'</div><div class="bar-value">'+formatNum(v.views)+'<span class="pct">'+share+'%</span></div></div><div class="bar-track"><div class="bar-fill" data-pct="'+pct+'"></div></div></div>';
   }).join('');
-  requestAnimationFrame(() => { chart.querySelectorAll('.bar-fill').forEach(f => { f.style.width = f.dataset.pct + '%'; }); });
+  requestAnimationFrame(()=>{ chart.querySelectorAll('.bar-fill').forEach(f=>{ f.style.width=f.dataset.pct+'%'; }); });
 }
-function renderGoal() {
-  const total = videos.reduce((s,v) => s + v.views, 0);
-  const goal = parseInt(($('goalInput').value || '0').replace(/[^0-9]/g, ''), 10) || 1;
-  const pct = Math.min(100, (total / goal) * 100);
-  $('goalBarFill').style.width = pct + '%';
-  $('goalPct').innerHTML = pct.toFixed(1) + '% <span>of ' + formatCompact(goal) + ' goal</span>';
-}
-function showErr(msg) { $('errHint').style.display = 'flex'; $('errText').textContent = '\u2715 ' + msg; }
-function hideErr() { $('errHint').style.display = 'none'; }
 
-$('addBtn').addEventListener('click', () => { const u = $('urlInput').value; if (u.trim()) { addVideo(u); $('urlInput').value = ''; } });
-$('urlInput').addEventListener('keydown', e => { if (e.key === 'Enter') $('addBtn').click(); });
-document.querySelectorAll('.sort-btn').forEach(b => b.addEventListener('click', () => { document.querySelectorAll('.sort-btn').forEach(x => x.classList.remove('active')); b.classList.add('active'); sortMode = b.dataset.sort; renderChart(); }));
-$('barChart').addEventListener('click', e => { const rm = e.target.closest('[data-remove]'); if (rm) removeVideo(rm.dataset.remove); });
-$('goalInput').addEventListener('input', renderGoal);
-
-const modal = $('modal');
-$('apiStatus').addEventListener('click', () => modal.classList.add('open'));
-$('setupApiLink').addEventListener('click', () => modal.classList.add('open'));
-modal.addEventListener('click', e => { if (e.target === modal) modal.classList.remove('open'); });
-$('saveKeyBtn').addEventListener('click', () => { const k = $('apiKeyInput').value.trim(); if (!k) { showToast('Enter a key first', true); return; } apiKey = k; setApiUI(true); modal.classList.remove('open'); showToast('Live mode enabled'); });
-$('clearKeyBtn').addEventListener('click', () => { apiKey = ''; setApiUI(false); modal.classList.remove('open'); showToast('Manual mode'); });
-function setApiUI(live) {
-  $('apiStatus').classList.toggle('live', live);
-  $('apiStatusText').textContent = live ? 'LIVE \u00b7 API' : 'MANUAL MODE';
-  $('apiFooter').textContent = live ? 'Live mode \u00b7 YouTube Data API v3' : 'Manual mode \u00b7 add API key for live data';
+function renderGoal(){
+  const total = videos.reduce((s,v)=>s+v.views,0);
+  const pct = Math.min(100,(total/GOAL)*100);
+  $('goalBarFill').style.width = pct+'%';
+  $('goalTargetLabel').textContent = formatCompact(GOAL);
+  $('goalPct').innerHTML = pct.toFixed(1)+'% <span>of '+formatCompact(GOAL)+' goal</span>';
 }
-renderAll();
+
+loadVideos();
 </script>
 </body>
 </html>

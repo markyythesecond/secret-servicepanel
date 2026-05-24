@@ -160,12 +160,16 @@
 
 // 1) Your YouTube Data API key. Get it from console.cloud.google.com
 //    IMPORTANT: restrict it to YouTube Data API v3 + your domain.
-const API_KEY = 'PASTE_YOUR_API_KEY_HERE';
+const API_KEY = 'AIzaSyDCDu-orYr3O2wigYzOO94lINKEkOYEEps';
 
 // 2) Your video IDs (the part after /shorts/ in the URL).
 //    Example: https://www.youtube.com/shorts/ee8RNlnLntw  ->  'ee8RNlnLntw'
 const VIDEO_IDS = [
   'ee8RNlnLntw',
+  `0iu5yH0ldtI`,
+  `YNo0BsFsMRE`,
+  `Hq4yV9kr9f4`,
+  `6EjN-aqlmL8`,
   // 'add', 'more', 'ids', 'here'
 ];
 
@@ -190,7 +194,7 @@ function escapeHtml(s){ return String(s).replace(/[&<>"']/g, c=>({'&':'&amp;','<
 let videos = [];
 
 async function loadVideos(){
-  if(!API_KEY || API_KEY === 'AIzaSyDCDu-orYr3O2wigYzOO94lINKEkOYEEps'){
+  if(!API_KEY || API_KEY === 'PASTE_YOUR_API_KEY_HERE'){
     setBadge(false, 'NO API KEY');
     $('barChart').innerHTML = '<div class="empty-state">Add your YouTube API key in the code to load live counts.<br>Open index.html and replace PASTE_YOUR_API_KEY_HERE.</div>';
     $('belt').innerHTML = '<div class="belt-empty">&mdash; no API key set &mdash;</div>';

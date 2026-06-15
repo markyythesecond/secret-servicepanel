@@ -1,0 +1,186 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Users · View Count</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600;900&family=Cormorant+Garamond:ital,wght@0,300;0,400;1,400;1,500&family=JetBrains+Mono:wght@400;700&display=swap');
+  :root {
+    --bg:#08070a; --bg-2:#0f0d12; --bg-3:#15101c; --fg:#ededed; --gray:#8a8590;
+    --muted:rgba(237,237,237,0.5); --accent:#6b3fa0; --accent-2:#9d6cd1;
+    --accent-glow:rgba(107,63,160,0.45); --border:rgba(237,237,237,0.12);
+    --green:#3dd676; --red:#d63a3a;
+  }
+  * { box-sizing:border-box; margin:0; padding:0; }
+  body { background:var(--bg); color:var(--fg); font-family:'Cormorant Garamond',serif; overflow-x:hidden; cursor:crosshair; min-height:100vh; }
+  body::before { content:''; position:fixed; inset:0; pointer-events:none;
+    background-image: radial-gradient(circle at 25% 30%, rgba(255,255,255,0.018) 1px, transparent 1px), radial-gradient(circle at 75% 70%, rgba(255,255,255,0.018) 1px, transparent 1px);
+    background-size:3px 3px,5px 5px; z-index:1000; mix-blend-mode:overlay; }
+  ::selection { background:var(--accent); color:var(--fg); }
+
+  nav { position:fixed; top:0; left:0; right:0; padding:1.5rem 3rem; display:flex; justify-content:space-between; align-items:center; z-index:100; backdrop-filter:blur(8px); background:rgba(8,7,10,0.6); border-bottom:1px solid var(--border); }
+  nav .logo { font-family:'Cinzel',serif; font-weight:900; font-size:1.1rem; letter-spacing:0.3em; color:var(--fg); text-decoration:none; }
+  nav .logo span { color:var(--accent-2); }
+  nav .nav-link { font-family:'JetBrains Mono',monospace; font-size:0.7rem; letter-spacing:0.3em; color:var(--muted); text-decoration:none; padding:0.35rem 0.7rem; border:1px solid var(--border); transition:all 0.2s; }
+  nav .nav-link:hover, nav .nav-link.active { color:var(--accent-2); border-color:var(--accent-2); box-shadow:0 0 12px var(--accent-glow); }
+  nav .live-badge { display:flex; align-items:center; gap:0.5rem; padding:0.35rem 0.7rem; border:1px solid var(--border); font-family:'JetBrains Mono',monospace; font-size:0.65rem; letter-spacing:0.2em; text-transform:uppercase; color:var(--muted); }
+  nav .live-badge .dot { width:7px; height:7px; border-radius:50%; background:var(--green); box-shadow:0 0 8px var(--green); animation:blink 2s ease-in-out infinite; }
+  nav .live-badge.offline .dot { background:var(--gray); box-shadow:none; animation:none; }
+  @keyframes blink { 0%,100%{opacity:1;} 50%{opacity:0.4;} }
+
+  .hero { padding:10rem 3rem 2rem; text-align:center; position:relative; overflow:hidden; }
+  .hero::after { content:''; position:absolute; inset:0; background:radial-gradient(ellipse at 50% 0%, var(--accent-glow), transparent 65%); pointer-events:none; }
+  .hero-inner { position:relative; z-index:1; }
+  .eyebrow { font-family:'JetBrains Mono',monospace; font-size:0.7rem; letter-spacing:0.4em; color:var(--accent-2); text-transform:uppercase; margin-bottom:1.5rem; }
+  .total-number { font-family:'Cinzel',serif; font-size:clamp(4rem,16vw,12rem); font-weight:900; line-height:0.9; letter-spacing:-0.02em; background:linear-gradient(180deg, var(--fg) 30%, var(--accent) 100%); -webkit-background-clip:text; background-clip:text; color:transparent; text-shadow:0 0 80px var(--accent-glow); font-variant-numeric:tabular-nums; }
+  .total-label { font-family:'Cormorant Garamond',serif; font-style:italic; font-size:1.4rem; color:var(--gray); margin-top:0.5rem; }
+
+  .users-section { max-width:900px; margin:0 auto; padding:3rem; }
+  .section-head { display:flex; align-items:center; gap:1.5rem; margin-bottom:2rem; }
+  .section-head h2 { font-family:'Cinzel',serif; font-size:1.4rem; font-weight:600; letter-spacing:0.2em; text-transform:uppercase; color:var(--accent-2); flex-shrink:0; }
+  .section-head hr { flex:1; border:none; border-top:1px solid var(--border); }
+
+  .user-row { display:grid; grid-template-columns:auto 1fr auto; align-items:center; gap:1.2rem; padding:1.1rem 1.4rem; background:var(--bg-2); border:1px solid var(--border); margin-bottom:0.8rem; animation:fadeIn 0.5s ease; transition:all 0.2s; }
+  .user-row:hover { border-color:var(--accent-2); box-shadow:0 0 16px var(--accent-glow); }
+  @keyframes fadeIn { from{opacity:0; transform:translateX(-20px);} to{opacity:1; transform:translateX(0);} }
+  .user-row .dot { width:10px; height:10px; border-radius:50%; background:var(--green); box-shadow:0 0 10px var(--green); animation:blink 2s ease-in-out infinite; }
+  .user-name { font-family:'Cinzel',serif; font-size:1.05rem; letter-spacing:0.03em; color:var(--fg); }
+  .user-room { font-family:'JetBrains Mono',monospace; font-size:0.7rem; color:var(--muted); letter-spacing:0.1em; text-transform:uppercase; margin-top:0.2rem; }
+  .user-seen { font-family:'JetBrains Mono',monospace; font-size:0.7rem; color:var(--accent-2); letter-spacing:0.1em; }
+
+  .empty-state { text-align:center; padding:4rem 2rem; border:1px dashed var(--border); font-family:'Cormorant Garamond',serif; font-style:italic; color:var(--gray); font-size:1.2rem; }
+
+  footer { padding:3rem; border-top:1px solid var(--border); display:flex; justify-content:space-between; flex-wrap:wrap; gap:1rem; font-family:'JetBrains Mono',monospace; font-size:0.7rem; letter-spacing:0.15em; color:var(--gray); text-transform:uppercase; }
+
+  @media (max-width:700px) {
+    nav { padding:1rem 1.5rem; }
+    .hero { padding:8rem 1.5rem 2rem; }
+    .users-section { padding:0 1.5rem 2rem; }
+    footer { padding:2rem 1.5rem; }
+  }
+</style>
+</head>
+<body>
+
+<nav>
+  <a href="index.html" class="logo">VIEW<span>·</span>COUNT</a>
+  <div style="display:flex; align-items:center; gap:1.5rem;">
+    <a href="users.html" class="nav-link active">USERS</a>
+    <div class="live-badge offline" id="liveBadge">
+      <span class="dot"></span>
+      <span id="liveText">LOADING</span>
+    </div>
+  </div>
+</nav>
+
+<section class="hero">
+  <div class="hero-inner">
+    <div class="eyebrow">&#10022; ONLINE NOW</div>
+    <div class="total-number" id="userCount">0</div>
+    <div class="total-label">monke online.</div>
+  </div>
+</section>
+
+<section class="users-section">
+  <div class="section-head"><h2>Active Sessions</h2><hr></div>
+  <div id="userList"><div class="empty-state">Loading...</div></div>
+</section>
+
+<footer>
+  <span>&copy; View Count</span>
+  <span id="updatedLabel">&mdash;</span>
+  <span>Polls every 8 seconds</span>
+</footer>
+
+<script>
+// ============================================================
+// JSONbin.io configuration — fill these in after creating your bin.
+// Sign up at https://jsonbin.io (free), create one bin, then:
+//   - BIN_ID: copy from the URL of your bin (the long string after /b/)
+//   - ACCESS_KEY: this is your X-Access-Key for reads.
+//     Best practice: make a key with "Read" permission only for the public site.
+// ============================================================
+const BIN_ID = '6a308109da38895dfec69171';
+const ACCESS_KEY = '$2a$10$OsqoiQHQ2/gezYSpRzL3G.miZ0zQBJG.58sc1iaFZwiHlHmw7OCMq';
+
+const REFRESH_MS = 8000;
+const STALE_AFTER_MS = 30000; // hide users not seen in 30s
+
+const $ = id => document.getElementById(id);
+
+function escapeHtml(s){ return String(s||'').replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+
+function setBadge(live, text){
+  const b = $('liveBadge');
+  b.classList.toggle('offline', !live);
+  document.getElementById('liveText').textContent = text;
+}
+
+function formatAgo(ms){
+  const s = Math.floor(ms/1000);
+  if (s < 5) return 'just now';
+  if (s < 60) return s + 's ago';
+  const m = Math.floor(s/60);
+  if (m < 60) return m + 'm ago';
+  const h = Math.floor(m/60);
+  return h + 'h ago';
+}
+
+async function loadUsers(){
+  if (BIN_ID === 'PASTE_BIN_ID_HERE' || ACCESS_KEY === 'PASTE_READ_KEY_HERE'){
+    setBadge(false, 'NOT CONFIGURED');
+    $('userList').innerHTML = '<div class="empty-state">Add your JSONbin BIN_ID and ACCESS_KEY in users.html to enable live data.</div>';
+    return;
+  }
+
+  try {
+    const res = await fetch('https://api.jsonbin.io/v3/b/' + BIN_ID + '/latest', {
+      headers: { 'X-Access-Key': ACCESS_KEY }
+    });
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    const json = await res.json();
+    // JSONbin wraps payload in { record: {...} } — the mod writes { users: [...] }
+    const record = json.record || {};
+    const users = Array.isArray(record.users) ? record.users : [];
+
+    // Filter out stale users (not pinged in STALE_AFTER_MS)
+    const now = Date.now();
+    const live = users.filter(u => u.lastSeen && (now - u.lastSeen) < STALE_AFTER_MS);
+
+    render(live);
+    setBadge(true, 'LIVE');
+    $('updatedLabel').textContent = 'Updated ' + new Date().toLocaleTimeString();
+  } catch (e) {
+    setBadge(false, 'OFFLINE');
+    $('userList').innerHTML = '<div class="empty-state">Failed to load: ' + escapeHtml(e.message) + '</div>';
+  }
+}
+
+function render(users){
+  $('userCount').textContent = users.length;
+
+  if (users.length === 0){
+    $('userList').innerHTML = '<div class="empty-state">No monke online right now.</div>';
+    return;
+  }
+
+  const now = Date.now();
+  $('userList').innerHTML = users.map(u => `
+    <div class="user-row">
+      <div class="dot"></div>
+      <div>
+        <div class="user-name">${escapeHtml(u.name || 'unknown')}</div>
+        <div class="user-room">room: ${escapeHtml(u.code || 'noroom')}</div>
+      </div>
+      <div class="user-seen">${formatAgo(now - (u.lastSeen || now))}</div>
+    </div>
+  `).join('');
+}
+
+loadUsers();
+setInterval(loadUsers, REFRESH_MS);
+</script>
+
+</body>
+</html>

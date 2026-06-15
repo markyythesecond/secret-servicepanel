@@ -27,6 +27,8 @@
   nav .live-badge .dot { width:7px; height:7px; border-radius:50%; background:var(--green); box-shadow:0 0 8px var(--green); animation:blink 2s ease-in-out infinite; }
   nav .live-badge.offline .dot { background:var(--gray); box-shadow:none; animation:none; }
   @keyframes blink { 0%,100%{opacity:1;} 50%{opacity:0.4;} }
+  nav .nav-link { font-family:'JetBrains Mono',monospace; font-size:0.7rem; letter-spacing:0.3em; color:var(--muted); text-decoration:none; padding:0.35rem 0.7rem; border:1px solid var(--border); transition:all 0.2s; }
+ nav .nav-link:hover { color:var(--accent-2); border-color:var(--accent-2); box-shadow:0 0 12px var(--accent-glow); }
 
   .hero { padding:10rem 3rem 3rem; text-align:center; position:relative; overflow:hidden; }
   .hero::after { content:''; position:absolute; inset:0; background:radial-gradient(ellipse at 50% 0%, var(--accent-glow), transparent 65%); pointer-events:none; }
@@ -104,9 +106,12 @@
 
 <nav>
   <a href="index.html" class="logo">VIEW<span>·</span>COUNT</a>
-  <div class="live-badge offline" id="liveBadge">
-    <span class="dot"></span>
-    <span id="liveText">LOADING</span>
+  <div style="display:flex; align-items:center; gap:1.5rem;">
+    <a href="users.html" class="nav-link">USERS</a>
+    <div class="live-badge offline" id="liveBadge">
+      <span class="dot"></span>
+      <span id="liveText">LOADING</span>
+    </div>
   </div>
 </nav>
 

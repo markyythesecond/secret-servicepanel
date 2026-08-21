@@ -57,8 +57,36 @@ const apiStore = {
   }
 };
 
+const localStore = (() => {
+  const PRE = "pb:";
+  const probe = () => {
+    try { localStorage.setItem(PRE+"_t","1"); localStorage.removeItem(PRE+"_t"); return true; }
+    catch(e){ return false; }
+  };
+  if (typeof localStorage === "undefined" || !probe()) return null;
+  return {
+    name: "local",
+    async get(k){ const v = localStorage.getItem(PRE+k); return v === null ? null : {key:k,value:v}; },
+    async set(k,v){
+      try { localStorage.setItem(PRE+k, v); }
+      catch(e){ throw new Error("This browser's storage is full. Delete a pin to free up room."); }
+      return {key:k,value:v};
+    },
+    async del(k){ localStorage.removeItem(PRE+k); return true; },
+    async list(prefix){
+      const out = [];
+      for (let i=0;i<localStorage.length;i++){
+        const k = localStorage.key(i);
+        if (k && k.startsWith(PRE+(prefix||""))) out.push(k.slice(PRE.length));
+      }
+      return out;
+    }
+  };
+})();
+
 const store = CONFIG.apiBase ? apiStore
             : (typeof window !== "undefined" && window.storage) ? claudeStore
+            : localStore ? localStore
             : memoryStore;
 
 const K_INDEX   = "pins:index";
@@ -540,8 +568,9 @@ async function deletePin(){
    ====================================================================== */
 function openUpload(){
   resetUpload();
-  $("#storageNote").textContent = store.name === "github"
-    ? "Pins are written to your GitHub repo through the configured API."
+  $("#storageNote").textContent =
+      store.name === "github" ? "Pins are written to your GitHub repo, so everyone sees them."
+    : store.name === "local"  ? "Pins are saved in this browser only. They stay after you close the tab, but other people will not see them."
     : "Pins are stored with this app and stay available next time you open it.";
   openScrim("#uploadScrim");
 }
@@ -575,7 +604,9 @@ function processImage(file){
       const img = new Image();
       img.onerror = () => reject(new Error("That file is not an image we can read."));
       img.onload = () => {
-        const MAX = 1400;
+        const tight = store.name === "local";      // localStorage is only ~5MB total
+        const MAX = tight ? 1100 : 1400;
+        const BUDGET = tight ? 700_000 : 4_200_000;
         const scale = Math.min(1, MAX / Math.max(img.width, img.height));
         const w = Math.max(1, Math.round(img.width * scale));
         const h = Math.max(1, Math.round(img.height * scale));
@@ -586,9 +617,9 @@ function processImage(file){
         ctx.fillRect(0, 0, w, h);        // flatten transparency so JPEG does not go black
         ctx.drawImage(img, 0, 0, w, h);
 
-        let q = 0.82, url = c.toDataURL("image/jpeg", q);
-        while (url.length > 4_200_000 && q > 0.4){ q -= 0.12; url = c.toDataURL("image/jpeg", q); }
-        if (url.length > 4_800_000) return reject(new Error("That image is too large to store. Try a smaller one."));
+        let q = tight ? 0.78 : 0.82, url = c.toDataURL("image/jpeg", q);
+        while (url.length > BUDGET && q > 0.38){ q -= 0.1; url = c.toDataURL("image/jpeg", q); }
+        if (url.length > BUDGET * 1.5) return reject(new Error("That image is too large to store. Try a smaller one."));
 
         resolve({ dataUrl:url, w, h });
       };
@@ -660,7 +691,7 @@ async function publish(){
     toast("Published to " + (CATEGORIES.find(c=>c.id===pin.cat)||{label:"your board"}).label);
   } catch(e){
     console.error(e);
-    toast("Could not save that pin. Try again.");
+    toast(e.message || "Could not save that pin. Try again.");
   } finally {
     btn.textContent = "Publish";
     syncPublish();

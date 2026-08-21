@@ -3,168 +3,143 @@
 
 /* ======================================================================
    CONFIG
-   Leave apiBase as null to keep everything in the built-in store.
-   Set it to a deployed worker URL to use a GitHub repo as the database.
+   apiBase must point at the deployed worker for uploads to be shared and
+   for admin moderation to mean anything. Left null, the site runs in a
+   single-browser preview mode with no real admin.
    ====================================================================== */
-const CONFIG = { apiBase: null };
+const CONFIG = { apiBase: null };  // <-- put your worker URL here
 
 /* ======================================================================
-   STORAGE ADAPTERS
-   Every adapter exposes the same four async methods, so swapping the
-   backend never touches the app code below.
+   DATA LAYER
+   Two backends, one interface. LocalData keeps everything in this browser.
+   ApiData talks to the worker, which is the only place deletes can be
+   authorised. Admin mode is real only on ApiData.
    ====================================================================== */
-const memoryStore = (() => {
-  const m = new Map();
-  return {
-    name: "memory",
-    async get(k){ return m.has(k) ? {key:k,value:m.get(k)} : null; },
-    async set(k,v){ m.set(k,v); return {key:k,value:v}; },
-    async del(k){ m.delete(k); return true; },
-    async list(prefix){ return [...m.keys()].filter(k=>k.startsWith(prefix||"")); }
-  };
-})();
 
-const claudeStore = {
-  name: "claude",
-  async get(k){ try { return await window.storage.get(k,false); } catch(e){ return null; } },
-  async set(k,v){ return await window.storage.set(k,v,false); },
-  async del(k){ try { return await window.storage.delete(k,false); } catch(e){ return false; } },
-  async list(prefix){ try { const r = await window.storage.list(prefix,false); return (r&&r.keys)||[]; } catch(e){ return []; } }
-};
+const OWNER_KEY = "pb:owners";     // pinId -> ownerToken, proves we uploaded it
+const ADMIN_KEY = "pb:admin";      // { token, expires }
 
-const apiStore = {
-  name: "github",
-  async get(k){
-    const r = await fetch(CONFIG.apiBase+"/kv/"+encodeURIComponent(k));
-    if (r.status === 404) return null;
-    if (!r.ok) throw new Error("read failed");
-    return { key:k, value: await r.text() };
-  },
-  async set(k,v){
-    const r = await fetch(CONFIG.apiBase+"/kv/"+encodeURIComponent(k),
-      { method:"PUT", headers:{"Content-Type":"text/plain"}, body:v });
-    if (!r.ok) throw new Error("write failed");
-    return { key:k, value:v };
-  },
-  async del(k){
-    const r = await fetch(CONFIG.apiBase+"/kv/"+encodeURIComponent(k),{method:"DELETE"});
-    return r.ok;
-  },
-  async list(prefix){
-    const r = await fetch(CONFIG.apiBase+"/kv?prefix="+encodeURIComponent(prefix||""));
-    if (!r.ok) return [];
-    return (await r.json()).keys || [];
-  }
-};
-
-const localStore = (() => {
-  const PRE = "pb:";
-  const probe = () => {
-    try { localStorage.setItem(PRE+"_t","1"); localStorage.removeItem(PRE+"_t"); return true; }
-    catch(e){ return false; }
-  };
-  if (typeof localStorage === "undefined" || !probe()) return null;
-  return {
-    name: "local",
-    async get(k){ const v = localStorage.getItem(PRE+k); return v === null ? null : {key:k,value:v}; },
-    async set(k,v){
-      try { localStorage.setItem(PRE+k, v); }
-      catch(e){ throw new Error("This browser's storage is full. Delete a pin to free up room."); }
-      return {key:k,value:v};
-    },
-    async del(k){ localStorage.removeItem(PRE+k); return true; },
-    async list(prefix){
-      const out = [];
-      for (let i=0;i<localStorage.length;i++){
-        const k = localStorage.key(i);
-        if (k && k.startsWith(PRE+(prefix||""))) out.push(k.slice(PRE.length));
-      }
-      return out;
-    }
-  };
-})();
-
-const store = CONFIG.apiBase ? apiStore
-            : (typeof window !== "undefined" && window.storage) ? claudeStore
-            : localStore ? localStore
-            : memoryStore;
-
-const K_INDEX   = "pins:index";
-const K_PROFILE = "profile:me";
-const K_SOCIAL  = "social:me";
-const blobKey   = id => "pinblob:" + id;
-const cmtKey    = id => "comments:" + id;
-const SEED_VERSION = 1;
-
-/* ======================================================================
-   SEED CONTENT
-   ====================================================================== */
-const PHOTO = "https://images.unsplash.com/photo-";
-function shot(id, ar){
-  const w = 640, h = Math.round(640 / ar);
-  return { src: PHOTO+id+"?auto=format&fit=crop&w="+w+"&h="+h+"&q=80", w, h };
+function ownerTokens(){ try { return JSON.parse(localStorage.getItem(OWNER_KEY)) || {}; } catch(e){ return {}; } }
+function rememberOwner(id, token){
+  const m = ownerTokens(); m[id] = token;
+  try { localStorage.setItem(OWNER_KEY, JSON.stringify(m)); } catch(e){}
 }
-function S(id, ar, cat, title, desc, by){
-  const s = shot(id, ar);
-  return { id:"s"+id.slice(0,8), kind:"seed", src:s.src, w:s.w, h:s.h,
-           cat, title, desc, by, likes:0, comments:0 };
+function forgetOwner(id){
+  const m = ownerTokens(); delete m[id];
+  try { localStorage.setItem(OWNER_KEY, JSON.stringify(m)); } catch(e){}
+}
+function adminSession(){
+  try {
+    const a = JSON.parse(localStorage.getItem(ADMIN_KEY));
+    return (a && a.expires > Date.now()) ? a : null;
+  } catch(e){ return null; }
 }
 
-const SEED = [
-  // recipes
-  S("1504674900247-0877df9cc836",4/5,"recipes","Herb-crusted steak with charred peppers","Rest it a full ten minutes. That is the whole trick.","Mara Ellis"),
-  S("1490645935967-10de6ba17061",1/1,"recipes","The ten-minute breakfast bowl I make every day","Soft egg, avocado, blistered tomatoes, whatever greens are left.","Jonah Reyes"),
-  S("1476224203421-9ac39bcb3327",3/4,"recipes","Crispy buttermilk chicken with honey mustard","Overnight buttermilk soak, then straight into the flour. No batter.","Priya Nair"),
-  S("1565299624946-b28f40a0ae38",4/5,"recipes","Weeknight sheet-pan pizza","Cold ferment the dough two days and bake it as hot as your oven goes.","Tomás Vidal"),
-  S("1540189549336-e6e99c3679fe",1/1,"recipes","Charred greens salad, no sad lunch","Char the lettuce. It sounds wrong and it is completely right.","Sena Kaya"),
-  S("1466637574441-749b8f19452f",3/2,"recipes","Sunday prep: five lunches, one board","Everything chopped at once, portioned once, done for the week.","Ida Brandt"),
-  S("1467003909585-2f8a72700288",4/5,"recipes","Slow-roasted salmon in broth","Low oven, lots of butter, and a broth you will want to drink.","Kofi Mensah"),
-  S("1493770348161-369560ae357d",3/4,"recipes","Brunch spread for six","Three bowls, one bake, and a fruit plate. Nothing needs to be hot.","Lena Moreau"),
-  S("1519864600265-abb23847ef2c",1/1,"recipes","Latte art, finally getting the hang of it","Steam colder, pour lower. Took about forty tries.","Ravi Shah"),
-  S("1509440159596-0249088772ff",4/5,"recipes","Sourdough with a seeded crust","Roll the shaped loaf in seeds before the final proof.","Nora Beck"),
-  S("1551024506-0bccd828d307",2/3,"recipes","Salted caramel over vanilla","Warm the caramel just enough that it pours in a thread.","Emre Doğan"),
-  S("1414235077428-338989a2e8c0",3/4,"recipes","Plating like a restaurant at home","Sauce first, protein second, herbs last. Wipe the rim.","Ayla Kurt"),
-  S("1517248135467-4c7edcad34c4",3/2,"recipes","Big table brunch, everything at once","Bring it all out together and let people build their own plate.","Mara Ellis"),
+const LocalData = {
+  name: "local",
+  canAdmin: false,
+  _read(k, f){ try { const v = localStorage.getItem("pb:"+k); return v ? JSON.parse(v) : f; } catch(e){ return f; } },
+  _write(k, v){
+    try { localStorage.setItem("pb:"+k, JSON.stringify(v)); }
+    catch(e){ throw new Error("This browser's storage is full. Delete a pin to free up room."); }
+  },
+  async listPins(){ return this._read("index", []); },
+  async image(id){ return localStorage.getItem("pb:img:"+id) || ""; },
+  async createPin(p, image){
+    const pin = { ...p, id: uid(), likes:0, comments:0, at: Date.now() };
+    try { localStorage.setItem("pb:img:"+pin.id, image); }
+    catch(e){ throw new Error("This browser's storage is full. Delete a pin to free up room."); }
+    this._write("index", [pin, ...this._read("index", [])]);
+    rememberOwner(pin.id, "local");
+    return pin;
+  },
+  async deletePin(id){
+    this._write("index", this._read("index", []).filter(p => p.id !== id));
+    localStorage.removeItem("pb:img:"+id);
+    localStorage.removeItem("pb:cmt:"+id);
+    forgetOwner(id);
+  },
+  async like(id, undo){
+    let likes = 0;
+    this._write("index", this._read("index", []).map(p => {
+      if (p.id !== id) return p;
+      likes = Math.max(0, (p.likes||0) + (undo ? -1 : 1));
+      return { ...p, likes };
+    }));
+    return likes;
+  },
+  async comments(id){ return this._read("cmt:"+id, []); },
+  async addComment(id, name, text){
+    const list = this._read("cmt:"+id, []);
+    const c = { id: uid(), name, text, at: Date.now() };
+    list.push(c);
+    this._write("cmt:"+id, list);
+    this._write("index", this._read("index", []).map(p => p.id === id ? { ...p, comments:list.length } : p));
+    return c;
+  },
+  async deleteComment(id, cid){
+    const list = this._read("cmt:"+id, []).filter(c => c.id !== cid);
+    this._write("cmt:"+id, list);
+    this._write("index", this._read("index", []).map(p => p.id === id ? { ...p, comments:list.length } : p));
+  },
+  async adminLogin(){ throw new Error("Admin needs the server. Set CONFIG.apiBase first."); },
+  canDelete(pin){ return !!ownerTokens()[pin.id]; }
+};
 
-  // home
-  S("1521017432531-fbd92d768814",3/4,"home","White walls, one red chair","One saturated object in a neutral room does more than a whole palette.","Ida Brandt"),
-  S("1522708323590-d24dbb6b0267",4/5,"home","Mustard armchair against dark panelling","Paint the panelling the darkest colour you are brave enough for.","Lena Moreau"),
-  S("1586023492125-27b2c045efd7",3/4,"home","Bare floors, big light, nothing extra","Took out half the furniture and the room finally worked.","Tomás Vidal"),
-  S("1493809842364-78817add7ffb",3/2,"home","Green velvet sofa, the only thing in the room","Everything else stays quiet so this can be loud.","Sena Kaya"),
-  S("1555041469-a586c61ea9bc",1/1,"home","Rust and teal, an unexpected pair","Warm orange against cool blue-green. Adds a blush pillow to soften it.","Priya Nair"),
-  S("1567016432779-094069958ea5",4/5,"home","Neutral living room that still feels warm","Layer four shades of the same beige and add texture, not colour.","Nora Beck"),
-  S("1616486338812-3dadae4b4ace",3/4,"home","Gallery wall, finally hung straight","Lay the whole thing out on the floor first and photograph it.","Kofi Mensah"),
-  S("1600210492486-724fe5c67fb0",4/5,"home","Plants doing the decorating","Six plants, three heights, one corner with real afternoon light.","Ravi Shah"),
-  S("1502672260266-1c1ef2d93688",3/2,"home","Small kitchen, dark floors, more counter","Lost the island, gained a run of worktop along the wall.","Jonah Reyes"),
-  S("1484154218962-a197022b5858",3/4,"home","Navy sofa and dried pampas","Deep blue reads as a neutral once there is enough wood in the room.","Ayla Kurt"),
-  S("1513694203232-719a280e022f",4/5,"home","Knit poufs and round wood tables","No sharp corners anywhere. The room feels calmer for it.","Emre Doğan"),
-  S("1560448204-e02f11c3d0e2",3/4,"home","Macramé wall hanging over a tan sofa","Made this over three evenings from about forty metres of cotton cord.","Mara Ellis"),
-  S("1556228453-efd6c1ff04f6",4/5,"home","Rattan headboard, linen everything","Washed linen only gets better. Do not iron it.","Ida Brandt"),
+const ApiData = {
+  name: "api",
+  canAdmin: true,
+  async _call(path, opts = {}){
+    const headers = { ...(opts.headers || {}) };
+    if (opts.body) headers["Content-Type"] = "application/json";
+    const a = adminSession();
+    if (a) headers["Authorization"] = "Bearer " + a.token;
+    const r = await fetch(CONFIG.apiBase + path, { ...opts, headers });
+    const text = await r.text();
+    let data = {};
+    try { data = text ? JSON.parse(text) : {}; } catch(e){}
+    if (!r.ok) throw new Error(data.error || "Request failed (" + r.status + ")");
+    return data;
+  },
+  async listPins(){ return (await this._call("/pins")).pins || []; },
+  async image(id){ return CONFIG.apiBase + "/images/" + id; },
+  async createPin(p, image){
+    const r = await this._call("/pins", {
+      method:"POST",
+      body: JSON.stringify({ ...p, image })
+    });
+    if (r.ownerToken) rememberOwner(r.pin.id, r.ownerToken);
+    return r.pin;
+  },
+  async deletePin(id){
+    const t = ownerTokens()[id];
+    await this._call("/pins/"+id, { method:"DELETE", headers: t ? { "X-Owner-Token": t } : {} });
+    forgetOwner(id);
+  },
+  async like(id, undo){
+    return (await this._call("/pins/"+id+"/like", { method:"POST", body: JSON.stringify({ undo }) })).likes;
+  },
+  async comments(id){ return (await this._call("/pins/"+id+"/comments")).comments || []; },
+  async addComment(id, name, text){
+    return (await this._call("/pins/"+id+"/comments", { method:"POST", body: JSON.stringify({ name, text }) })).comment;
+  },
+  async deleteComment(id, cid){
+    await this._call("/pins/"+id+"/comments/"+cid, { method:"DELETE" });
+  },
+  async adminLogin(password){
+    const r = await fetch(CONFIG.apiBase + "/auth/admin", {
+      method:"POST", headers:{ "Content-Type":"application/json" },
+      body: JSON.stringify({ password })
+    });
+    const d = await r.json().catch(()=>({}));
+    if (!r.ok) throw new Error(d.error || "Could not log in.");
+    localStorage.setItem(ADMIN_KEY, JSON.stringify({ token:d.token, expires:d.expires }));
+    return true;
+  },
+  canDelete(pin){ return state.admin || !!ownerTokens()[pin.id]; }
+};
 
-  // fashion
-  S("1483985988355-763728e1935b",3/4,"fashion","Autumn rack: layering starts here","Build around one heavy coat and keep everything under it thin.","Lena Moreau"),
-  S("1490481651871-ab68de25d43d",1/1,"fashion","Yellow wall, gold hoops","Match the metal to the wall and the whole photo locks together.","Sena Kaya"),
-  S("1529139574466-a303027c1d8b",4/5,"fashion","A rail of neutrals I actually wear","Cut the wardrobe to twelve pieces that all go together.","Nora Beck"),
-  S("1515886657613-9f3515b0c78f",3/4,"fashion","Red graphic tee under black leather","One bright piece, everything else black. Never fails.","Ravi Shah"),
-  S("1496747611176-843222e1e57c",2/3,"fashion","Head to toe yellow, no notes","Monochrome is easier than it looks if the textures differ.","Kofi Mensah"),
-  S("1479064555552-3ef4979f8908",3/4,"fashion","Floral wrap dress for the coast","Wrap dresses travel well. Roll, do not fold.","Priya Nair"),
-  S("1434389677669-e08b4cac3105",1/1,"fashion","Flat lay: boots, belt, grey knit","Brown leather and grey wool is the pairing I keep coming back to.","Tomás Vidal"),
-  S("1485462537746-965f33f7f6a7",4/5,"fashion","Fringed cream poncho","Knit on 8mm needles over two weeks of evenings.","Ayla Kurt"),
-  S("1441984904996-e0b6ba687e04",2/3,"fashion","Pink coat in the colonnade","Find repeating architecture and stand where the light breaks through.","Jonah Reyes"),
-  S("1503342217505-b0a15ec3261c",3/4,"fashion","Black tee, high waist, pink wall","The wall is doing most of the work here and that is fine.","Emre Doğan"),
-  S("1487222477894-8943e31ef7b2",4/5,"fashion","Tan leather jacket with a tie","Formal on top, relaxed jacket. It should not work but it does.","Mara Ellis"),
-  S("1516762689617-e1cffcef479d",1/1,"fashion","Denim, cream knit, tan boots","The uniform. Three pieces, works nine months of the year.","Ida Brandt"),
-
-  // creative
-  S("1459156212016-c812468e2115",1/1,"creative","Repotting the whole windowsill","Terracotta breathes, so water more often than you think.","Nora Beck"),
-  S("1452860606245-08befc0ff44b",3/2,"creative","Washi tape and wooden dowels","Everything on this desk cost less than a coffee and lasts for years.","Sena Kaya"),
-  S("1493925410384-84f842e616fb",1/1,"creative","Everyday makeup, five products","Cream blush over powder. Everything else is optional.","Lena Moreau"),
-  S("1462927114214-6956d2fddd4e",3/2,"creative","Sneaker pile, sorted by nothing","Clean the midsoles with a magic eraser and they look new.","Ravi Shah"),
-  S("1544441893-675973e31985",4/5,"creative","Grey sweats and white leather","Wash the sweats cold and hang dry or they lose their shape.","Kofi Mensah"),
-  S("1495474472287-4d71bcdd2085",3/2,"creative","Cafe with the long communal table","Copying this exact table length for the studio.","Priya Nair"),
-  S("1445205170230-053b83016050",3/4,"creative","Store lighting I want to copy","Warm pendants low over the rail, nothing overhead.","Tomás Vidal"),
-  S("1469334031218-e382a71b716b",3/2,"creative","Green tiled bar, brass everything","Glossy tile plus unlacquered brass that is allowed to patina.","Ayla Kurt")
-];
+const Data = CONFIG.apiBase ? ApiData : LocalData;
 
 const CATEGORIES = [
   { id:"all",      label:"All ideas" },
@@ -190,6 +165,7 @@ const state = {
   pins: [],
   blobs: {},           // id -> data url, for uploaded pins
   commentCache: {},    // id -> array
+  admin: false,
   profile: null,
   social: { likes:[], saves:[] },
   filter: "all",
@@ -220,7 +196,7 @@ function ago(ts){
   if (d < 604800) return Math.floor(d/86400)+"d ago";
   return new Date(ts).toLocaleDateString(undefined,{month:"short",day:"numeric"});
 }
-function srcOf(p){ return p.kind === "upload" ? (state.blobs[p.id] || "") : p.src; }
+function srcOf(p){ return state.blobs[p.id] || ""; }
 
 let toastTimer;
 function toast(msg){
@@ -234,50 +210,43 @@ function toast(msg){
 /* ======================================================================
    PERSISTENCE
    ====================================================================== */
-async function readJSON(key, fallback){
-  try {
-    const r = await store.get(key);
-    if (!r || r.value == null) return fallback;
-    return JSON.parse(r.value);
-  } catch(e){ return fallback; }
+const PROFILE_KEY = "pb:profile";
+const SOCIAL_KEY  = "pb:social";
+
+function loadLocal(key, fallback){
+  try { const v = localStorage.getItem(key); return v ? JSON.parse(v) : fallback; }
+  catch(e){ return fallback; }
 }
-async function writeJSON(key, value){
-  try { await store.set(key, JSON.stringify(value)); return true; }
-  catch(e){ console.error("write failed", key, e); return false; }
+function storeLocal(key, value){
+  try { localStorage.setItem(key, JSON.stringify(value)); } catch(e){}
 }
-const saveIndex  = () => writeJSON(K_INDEX,  { v:SEED_VERSION, pins:state.pins });
-const saveSocial = () => writeJSON(K_SOCIAL, state.social);
+const saveSocial = () => storeLocal(SOCIAL_KEY, state.social);
+
+async function loadImages(){
+  await Promise.all(state.pins.map(async p => {
+    if (state.blobs[p.id]) return;
+    try { state.blobs[p.id] = await Data.image(p.id); } catch(e){ state.blobs[p.id] = ""; }
+  }));
+}
+
+async function refresh(){
+  state.pins = await Data.listPins();
+  await loadImages();
+  renderChips(); render();
+}
 
 async function boot(){
-  const idx = await readJSON(K_INDEX, null);
-
-  if (idx && Array.isArray(idx.pins) && idx.pins.length){
-    state.pins = idx.pins;
-    const have = new Set(state.pins.map(p=>p.id));
-    const missing = SEED.filter(s => !have.has(s.id));
-    if (missing.length){ state.pins = state.pins.concat(missing); await saveIndex(); }
-  } else {
-    state.pins = SEED.map(p => ({...p, likes: 6 + (p.title.length * 7) % 180 }));
-    await saveIndex();
-  }
-
-  state.profile = await readJSON(K_PROFILE, null);
-  state.social  = await readJSON(K_SOCIAL, { likes:[], saves:[] });
+  state.profile = loadLocal(PROFILE_KEY, null);
+  state.social  = loadLocal(SOCIAL_KEY, { likes:[], saves:[] });
   state.social.likes = state.social.likes || [];
   state.social.saves = state.social.saves || [];
+  state.admin = Data.canAdmin && !!adminSession();
 
-  // pull image data for uploaded pins in parallel
-  const uploads = state.pins.filter(p => p.kind === "upload");
-  await Promise.all(uploads.map(async p => {
-    try {
-      const r = await store.get(blobKey(p.id));
-      if (r && r.value) state.blobs[p.id] = r.value;
-    } catch(e){ /* blob missing; card falls back to placeholder */ }
-  }));
+  paintProfile(); paintAdmin();
+  renderChips(); render();
 
-  paintProfile();
-  renderChips();
-  render();
+  try { await refresh(); }
+  catch(e){ toast("Could not load pins. " + e.message); }
 }
 
 /* ======================================================================
@@ -286,7 +255,7 @@ async function boot(){
 function visiblePins(){
   const q = state.query.trim().toLowerCase();
   return state.pins.filter(p => {
-    if (state.filter === "mine"  && p.kind !== "upload") return false;
+    if (state.filter === "mine"  && !ownerTokens()[p.id]) return false;
     if (state.filter === "saved" && !state.social.saves.includes(p.id)) return false;
     if (!["all","mine","saved"].includes(state.filter) && p.cat !== state.filter) return false;
     if (!q) return true;
@@ -417,15 +386,19 @@ function toggleSave(id){
   if (state.openPin === id) paintDetail();
 }
 
-function toggleLike(id){
+async function toggleLike(id){
   const p = state.pins.find(x=>x.id===id);
   if (!p) return;
   const i = state.social.likes.indexOf(id);
-  if (i > -1){ state.social.likes.splice(i,1); p.likes = Math.max(0,(p.likes||0)-1); }
-  else { state.social.likes.push(id); p.likes = (p.likes||0)+1; }
-  saveSocial(); saveIndex();
-  render();
+  const undo = i > -1;
+  if (undo) state.social.likes.splice(i,1); else state.social.likes.push(id);
+  p.likes = Math.max(0, (p.likes||0) + (undo ? -1 : 1));   // optimistic
+  saveSocial(); render();
   if (state.openPin === id) paintDetail();
+  try {
+    const likes = await Data.like(id, undo);
+    if (typeof likes === "number"){ p.likes = likes; render(); if (state.openPin === id) paintDetail(); }
+  } catch(e){ /* count re-syncs on the next load */ }
 }
 
 async function downloadPin(p){
@@ -484,7 +457,9 @@ async function paintDetail(){
   lk.querySelector("svg").setAttribute("fill", liked ? "#e60023" : "none");
   lk.querySelector("svg").setAttribute("stroke", liked ? "#e60023" : "currentColor");
 
-  $("#dDelete").style.display = p.kind === "upload" ? "" : "none";
+  const canDel = Data.canDelete(p);
+  $("#dDelete").style.display = canDel ? "" : "none";
+  $("#dDelete").title = state.admin && !ownerTokens()[p.id] ? "Delete as admin" : "Delete this pin";
 
   const me = state.profile;
   $("#dMeAvatar").textContent = initial(me ? me.name : "?");
@@ -495,7 +470,7 @@ async function paintDetail(){
 
 async function loadComments(id){
   if (state.commentCache[id]) return state.commentCache[id];
-  const list = await readJSON(cmtKey(id), []);
+  const list = await Data.comments(id);
   state.commentCache[id] = list;
   return list;
 }
@@ -517,9 +492,13 @@ async function paintComments(id){
           '<div><span class="who">'+esc(c.name)+'</span><span class="when">'+ago(c.at)+'</span></div>'+
           '<div class="text">'+esc(c.text)+'</div>'+
         '</div>'+
+        (state.admin ? '<button class="cmt-del" data-cid="'+esc(c.id)+'" aria-label="Delete comment" title="Delete comment">'+
+          '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg></button>' : '')+
       '</div>').join("");
   }
   box.innerHTML = html;
+  box.querySelectorAll(".cmt-del").forEach(b =>
+    b.addEventListener("click", () => removeComment(id, b.dataset.cid)));
 }
 
 async function postComment(){
@@ -534,33 +513,53 @@ async function postComment(){
     return;
   }
 
-  const list = await loadComments(p.id);
-  list.push({ id:uid(), name:state.profile.name, text, at:Date.now() });
-  state.commentCache[p.id] = list;
   input.value = "";
   input.style.height = "auto";
-
-  p.comments = list.length;
-  await Promise.all([ writeJSON(cmtKey(p.id), list), saveIndex() ]);
-  await paintComments(p.id);
-  $("#dComments").scrollTop = $("#dComments").scrollHeight;
+  try {
+    const c = await Data.addComment(p.id, state.profile.name, text);
+    const list = await loadComments(p.id);
+    list.push(c);
+    state.commentCache[p.id] = list;
+    p.comments = list.length;
+    await paintComments(p.id);
+    $("#dComments").scrollTop = $("#dComments").scrollHeight;
+  } catch(e){
+    input.value = text;
+    toast(e.message || "Could not post that comment.");
+  }
 }
 
 async function deletePin(){
   const p = state.pins.find(x=>x.id===state.openPin);
-  if (!p || p.kind !== "upload") return;
-  if (!confirm("Delete “"+p.title+"”? This cannot be undone.")) return;
+  if (!p || !Data.canDelete(p)) return;
+  const who = state.admin && !ownerTokens()[p.id] ? " as an admin" : "";
+  if (!confirm("Delete “"+p.title+"”"+who+"? This cannot be undone.")) return;
+
+  try { await Data.deletePin(p.id); }
+  catch(e){ return toast(e.message || "Could not delete that pin."); }
 
   state.pins = state.pins.filter(x=>x.id!==p.id);
   state.social.saves = state.social.saves.filter(x=>x!==p.id);
   state.social.likes = state.social.likes.filter(x=>x!==p.id);
   delete state.blobs[p.id];
   delete state.commentCache[p.id];
+  saveSocial();
 
   closeScrim("#detailScrim");
-  await Promise.all([ saveIndex(), saveSocial(), store.del(blobKey(p.id)), store.del(cmtKey(p.id)) ]);
   renderChips(); render();
   toast("Pin deleted");
+}
+
+async function removeComment(pinId, cid){
+  if (!state.admin) return;
+  if (!confirm("Delete this comment?")) return;
+  try { await Data.deleteComment(pinId, cid); }
+  catch(e){ return toast(e.message || "Could not delete that comment."); }
+  state.commentCache[pinId] = (state.commentCache[pinId]||[]).filter(c=>c.id!==cid);
+  const p = state.pins.find(x=>x.id===pinId);
+  if (p) p.comments = state.commentCache[pinId].length;
+  await paintComments(pinId);
+  toast("Comment deleted");
 }
 
 /* ======================================================================
@@ -568,10 +567,9 @@ async function deletePin(){
    ====================================================================== */
 function openUpload(){
   resetUpload();
-  $("#storageNote").textContent =
-      store.name === "github" ? "Pins are written to your GitHub repo, so everyone sees them."
-    : store.name === "local"  ? "Pins are saved in this browser only. They stay after you close the tab, but other people will not see them."
-    : "Pins are stored with this app and stay available next time you open it.";
+  $("#storageNote").textContent = Data.name === "api"
+    ? "Your pin goes live for everyone. Admins can remove anything that does not belong."
+    : "Saved in this browser only. Nobody else sees it until the server is connected.";
   openScrim("#uploadScrim");
 }
 
@@ -604,7 +602,7 @@ function processImage(file){
       const img = new Image();
       img.onerror = () => reject(new Error("That file is not an image we can read."));
       img.onload = () => {
-        const tight = store.name === "local";      // localStorage is only ~5MB total
+        const tight = Data.name === "local";      // localStorage is only ~5MB total
         const MAX = tight ? 1100 : 1400;
         const BUDGET = tight ? 700_000 : 4_200_000;
         const scale = Math.min(1, MAX / Math.max(img.width, img.height));
@@ -662,26 +660,19 @@ async function publish(){
   const btn = $("#uPublish");
   btn.disabled = true; btn.textContent = "Publishing…";
 
-  const pin = {
-    id: uid(),
-    kind: "upload",
-    src: "",
+  const draft = {
     w: state.pending.w,
     h: state.pending.h,
     cat: $("#uCat").value,
     title,
     desc: $("#uDesc").value.trim(),
-    by: state.profile.name,
-    likes: 0,
-    comments: 0,
-    at: Date.now()
+    by: state.profile.name
   };
 
   try {
-    await store.set(blobKey(pin.id), state.pending.dataUrl);
-    state.blobs[pin.id] = state.pending.dataUrl;
+    const pin = await Data.createPin(draft, state.pending.dataUrl);
+    state.blobs[pin.id] = Data.name === "local" ? state.pending.dataUrl : await Data.image(pin.id);
     state.pins.unshift(pin);
-    await saveIndex();
 
     closeScrim("#uploadScrim");
     state.filter = "all"; state.query = ""; $("#search").value = "";
@@ -736,7 +727,7 @@ async function submitAuth(){
     return;
   }
   state.profile = { name, email: $("#aEmail").value.trim() || null, at: Date.now() };
-  await writeJSON(K_PROFILE, state.profile);
+  storeLocal(PROFILE_KEY, state.profile);
   paintProfile();
   closeScrim("#authScrim");
   toast("Signed in as " + name);
@@ -744,10 +735,66 @@ async function submitAuth(){
 
 async function logout(){
   state.profile = null;
-  await store.del(K_PROFILE);
+  try { localStorage.removeItem(PROFILE_KEY); } catch(e){}
   paintProfile();
   closeScrim("#authScrim");
   toast("Logged out");
+}
+
+/* ======================================================================
+   ADMIN
+   The password is checked by the worker, never here. All this code does
+   is hold a signed session token and show the extra controls.
+   ====================================================================== */
+function paintAdmin(){
+  $("#adminBar").style.display = state.admin ? "" : "none";
+  if (state.admin){
+    const a = adminSession();
+    const mins = a ? Math.max(0, Math.round((a.expires - Date.now())/60000)) : 0;
+    $("#adminUntil").textContent = mins > 90
+      ? "Session ends in " + Math.round(mins/60) + "h"
+      : "Session ends in " + mins + "m";
+  }
+}
+
+function openAdmin(){
+  if (!Data.canAdmin){
+    return toast("Admin needs the server. Set CONFIG.apiBase in app.js first.");
+  }
+  $("#adminPass").value = "";
+  $("#adminHint").textContent = "Ask the site owner if you do not have this.";
+  $("#adminHint").className = "hint";
+  openScrim("#adminScrim");
+  setTimeout(()=>$("#adminPass").focus(), 120);
+}
+
+async function submitAdmin(){
+  const pass = $("#adminPass").value;
+  const btn = $("#adminSubmit");
+  if (!pass) return;
+  btn.disabled = true; btn.textContent = "Checking\u2026";
+  try {
+    await Data.adminLogin(pass);
+    state.admin = true;
+    paintAdmin();
+    closeScrim("#adminScrim");
+    render();
+    toast("Admin mode on");
+  } catch(e){
+    $("#adminHint").textContent = e.message || "Could not log in.";
+    $("#adminHint").className = "hint error";
+    $("#adminPass").select();
+  } finally {
+    btn.disabled = false; btn.textContent = "Log in as admin";
+  }
+}
+
+function adminLogout(){
+  try { localStorage.removeItem(ADMIN_KEY); } catch(e){}
+  state.admin = false;
+  paintAdmin(); render();
+  if (state.openPin) paintDetail();
+  toast("Admin mode off");
 }
 
 /* ======================================================================
@@ -757,7 +804,7 @@ function renderChips(){
   const box = $("#chips");
   box.innerHTML = "";
   const hidden = id =>
-    (id === "mine"  && !state.pins.some(p=>p.kind==="upload")) ||
+    (id === "mine"  && !state.pins.some(p=>ownerTokens()[p.id])) ||
     (id === "saved" && !state.social.saves.length);
   if (hidden(state.filter)) state.filter = "all";
   CATEGORIES.forEach(c => {
@@ -834,6 +881,18 @@ $("#aLogout").addEventListener("click", logout);
 $("#aClose").addEventListener("click", () => closeScrim("#authScrim"));
 $$(".tab").forEach(t => t.addEventListener("click", () => openAuth(t.dataset.tab)));
 $("#aName").addEventListener("keydown", e => { if (e.key === "Enter") submitAuth(); });
+
+$("#adminLink").addEventListener("click", e => { e.preventDefault(); closeAll(); openAdmin(); });
+$("#adminClose").addEventListener("click", () => closeScrim("#adminScrim"));
+$("#adminSubmit").addEventListener("click", submitAdmin);
+$("#adminPass").addEventListener("keydown", e => { if (e.key === "Enter") submitAdmin(); });
+$("#adminExit").addEventListener("click", adminLogout);
+$("#adminRefresh").addEventListener("click", async () => {
+  toast("Reloading\u2026");
+  try { await refresh(); toast("Up to date"); }
+  catch(e){ toast(e.message || "Could not reload."); }
+});
+if (location.hash === "#admin") setTimeout(openAdmin, 400);
 
 $("#uClose").addEventListener("click", () => closeScrim("#uploadScrim"));
 $("#uCancel").addEventListener("click", () => closeScrim("#uploadScrim"));

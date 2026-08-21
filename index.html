@@ -1,0 +1,207 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Pinboard — discovering ideas to try</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Nunito:wght@600;700;800;900&family=Figtree:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="styles.css">
+<script src="app.js" defer></script>
+</head>
+<body>
+
+<header class="header" id="header">
+  <a class="mark" href="#" aria-label="Pinboard home" id="markBtn">
+    <svg width="30" height="30" viewBox="0 0 32 32" aria-hidden="true">
+      <circle cx="16" cy="16" r="16" fill="#e60023"/>
+      <path d="M16.6 6.6c-5.3 0-8 3.6-8 6.7 0 1.8.7 3.4 2.2 4 .25.1.47.01.55-.27l.22-.86c.07-.27.04-.37-.16-.61-.44-.52-.72-1.2-.72-2.15 0-2.77 2.1-5.25 5.46-5.25 2.98 0 4.62 1.79 4.62 4.18 0 3.15-1.41 5.8-3.5 5.8-1.15 0-2.02-.94-1.74-2.1.33-1.39.97-2.88.97-3.88 0-.9-.49-1.65-1.5-1.65-1.19 0-2.15 1.21-2.15 2.83 0 1.03.35 1.73.35 1.73l-1.42 5.95c-.42 1.76-.06 3.92-.03 4.14.02.13.19.16.27.06.11-.14 1.53-1.87 2.01-3.6.14-.49.79-3.06.79-3.06.39.73 1.53 1.37 2.74 1.37 3.6 0 6.05-3.25 6.05-7.6 0-3.29-2.82-6.36-7.1-6.36z" fill="#fff"/>
+    </svg>
+  </a>
+
+  <nav class="nav" aria-label="Main">
+    <button class="nav-link active" data-nav="home">Home</button>
+    <button class="nav-link" data-nav="explore">Explore</button>
+    <button class="nav-link" data-nav="create">Create</button>
+  </nav>
+
+  <div class="search" id="searchWrap">
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true">
+      <circle cx="11" cy="11" r="7"/><path d="M20 20l-3.6-3.6"/>
+    </svg>
+    <input id="search" type="search" placeholder="Search for recipes, home ideas, outfits…" aria-label="Search pins">
+    <button class="search-clear" id="searchClear" aria-label="Clear search">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg>
+    </button>
+  </div>
+
+  <div class="header-actions">
+    <button class="icon-btn" id="createBtn" aria-label="Create a pin" title="Create a pin">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
+    </button>
+    <button class="btn btn-primary" id="loginBtn">Log in</button>
+    <button class="btn btn-secondary" id="signupBtn">Sign up</button>
+    <button class="avatar-chip" id="profileChip">
+      <span class="avatar" id="profileAvatar">Y</span>
+      <span id="profileName">You</span>
+    </button>
+  </div>
+</header>
+
+<main>
+  <section class="hero">
+    <h1>Discovering <span class="cycle" id="cycle">dinner ideas</span> to try</h1>
+    <p>Save what you love, upload what you make, and leave a note on the ones worth coming back to.</p>
+    <div class="hero-cta">
+      <button class="btn btn-primary" id="exploreCta">Explore ideas</button>
+      <button class="btn btn-secondary" id="createCta">Create a pin</button>
+    </div>
+  </section>
+
+  <div class="chips-wrap">
+    <div class="chips" id="chips" role="tablist" aria-label="Categories"></div>
+  </div>
+
+  <div class="board">
+    <div class="grid" id="grid"></div>
+  </div>
+</main>
+
+<button class="fab" id="fab" aria-label="Create a pin">
+  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
+</button>
+
+<!-- detail -->
+<div class="scrim" id="detailScrim" role="dialog" aria-modal="true" aria-label="Pin detail">
+  <div class="sheet" id="detailSheet">
+    <div class="detail">
+      <div class="detail-img"><img id="dImg" alt=""></div>
+      <div class="detail-side">
+        <div class="detail-top">
+          <div class="detail-actions">
+            <button class="icon-btn" id="dLike" aria-label="Like this pin">
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linejoin="round"><path d="M12 20.2S3.8 15.3 3.8 9.6A4.6 4.6 0 0 1 12 6.9a4.6 4.6 0 0 1 8.2 2.7c0 5.7-8.2 10.6-8.2 10.6z"/></svg>
+            </button>
+            <button class="icon-btn" id="dDownload" aria-label="Download image">
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3.5v11M7.5 10.5l4.5 4.5 4.5-4.5M4.5 19.5h15"/></svg>
+            </button>
+            <button class="icon-btn" id="dDelete" aria-label="Delete this pin" title="Delete this pin" style="display:none">
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M4.5 6.5h15M9.5 6.5V4.8h5v1.7M6.8 6.5l.8 12.2h8.8l.8-12.2"/></svg>
+            </button>
+            <span class="spacer"></span>
+            <button class="btn btn-primary btn-sm" id="dSave">Save</button>
+            <button class="icon-btn" id="dClose" aria-label="Close">
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg>
+            </button>
+          </div>
+          <h2 id="dTitle"></h2>
+          <p class="detail-desc" id="dDesc"></p>
+          <div class="detail-author">
+            <span class="avatar" id="dAvatar"></span>
+            <div>
+              <div class="name" id="dAuthor"></div>
+              <div class="sub" id="dSub"></div>
+            </div>
+          </div>
+        </div>
+        <div class="comments" id="dComments"></div>
+        <div class="composer">
+          <span class="avatar" id="dMeAvatar" style="width:40px;height:40px;flex:none"></span>
+          <textarea id="dInput" rows="1" placeholder="Add a comment" aria-label="Add a comment"></textarea>
+          <button class="btn btn-primary btn-sm" id="dSend">Post</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- upload -->
+<div class="scrim" id="uploadScrim" role="dialog" aria-modal="true" aria-label="Create a pin">
+  <div class="sheet" style="max-width:900px">
+    <div class="sheet-head">
+      <h2>Create a pin</h2>
+      <button class="icon-btn" id="uClose" aria-label="Close">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg>
+      </button>
+    </div>
+    <div class="sheet-body">
+      <div class="upload-grid">
+        <div>
+          <div class="dropzone" id="dropzone" tabindex="0" role="button" aria-label="Choose an image to upload">
+            <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" opacity=".55"><path d="M12 16.5V4.5M7.5 9l4.5-4.5L16.5 9"/><path d="M4.5 15v3.2c0 .7.6 1.3 1.3 1.3h12.4c.7 0 1.3-.6 1.3-1.3V15"/></svg>
+            <span class="big">Drag an image here</span>
+            <span class="small">Or click to browse. JPG, PNG, WebP or GIF, up to about 12 MB.</span>
+          </div>
+          <div class="preview" id="preview" style="display:none">
+            <img id="previewImg" alt="Selected image preview">
+            <button class="btn btn-secondary btn-sm swap" id="swapBtn">Change</button>
+          </div>
+          <input type="file" id="file" accept="image/*" hidden>
+        </div>
+        <div>
+          <div class="field">
+            <label for="uTitle">Title</label>
+            <input id="uTitle" maxlength="90" placeholder="What is this idea?">
+            <div class="hint" id="uTitleHint">Give it a name people can search for.</div>
+          </div>
+          <div class="field">
+            <label for="uDesc">Description</label>
+            <textarea id="uDesc" maxlength="400" placeholder="Add ingredients, sources, sizes, or what you'd change next time."></textarea>
+          </div>
+          <div class="field">
+            <label for="uCat">Board</label>
+            <select id="uCat">
+              <option value="recipes">Recipes</option>
+              <option value="home">Home ideas</option>
+              <option value="fashion">Fashion</option>
+              <option value="creative">Creative projects</option>
+            </select>
+          </div>
+          <div class="note" id="storageNote"></div>
+        </div>
+      </div>
+    </div>
+    <div class="sheet-foot">
+      <button class="btn btn-ghost" id="uCancel">Cancel</button>
+      <button class="btn btn-primary" id="uPublish" disabled>Publish</button>
+    </div>
+  </div>
+</div>
+
+<!-- auth -->
+<div class="scrim" id="authScrim" role="dialog" aria-modal="true" aria-label="Account">
+  <div class="sheet" style="max-width:440px">
+    <div class="sheet-head">
+      <h2 id="authTitle">Log in</h2>
+      <button class="icon-btn" id="aClose" aria-label="Close">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg>
+      </button>
+    </div>
+    <div class="sheet-body">
+      <div class="tabs">
+        <button class="tab active" data-tab="login">Log in</button>
+        <button class="tab" data-tab="signup">Sign up</button>
+      </div>
+      <div class="field">
+        <label for="aName">Display name</label>
+        <input id="aName" maxlength="40" placeholder="Ada Lovelace">
+        <div class="hint" id="aNameHint">This is the name shown on your pins and comments.</div>
+      </div>
+      <div class="field" id="emailField">
+        <label for="aEmail">Email</label>
+        <input id="aEmail" type="email" placeholder="you@example.com">
+      </div>
+      <div class="note">No password, no server. Your profile is stored with your pins so comments have a name attached. Use “Log out” in the profile menu to switch names.</div>
+    </div>
+    <div class="sheet-foot">
+      <button class="btn btn-ghost" id="aLogout" style="display:none">Log out</button>
+      <button class="btn btn-primary" id="aSubmit">Continue</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+</body>
+</html>

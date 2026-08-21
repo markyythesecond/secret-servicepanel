@@ -355,3 +355,38 @@ input,textarea,select{font:inherit;color:inherit}
   *{animation:none!important;transition-duration:.01ms!important}
   .pin:hover .pin-media img.loaded{transform:none}
 }
+
+/* ---------- admin ---------- */
+.admin-bar{
+  position:sticky;top:68px;z-index:58;
+  display:flex;align-items:center;gap:10px;
+  padding:10px 20px;background:var(--ink);color:#fff;
+  font-size:13px;font-weight:600;
+}
+.admin-bar strong{font-family:var(--display);font-weight:800;font-size:14px}
+.admin-bar #adminUntil{opacity:.65;font-weight:500}
+.admin-dot{width:8px;height:8px;border-radius:50%;background:var(--red);flex:none}
+.admin-spacer{flex:1}
+.admin-act{
+  height:32px;padding:0 14px;border-radius:10px;
+  background:rgba(255,255,255,.14);color:#fff;font-size:13px;font-weight:600;
+  transition:background .16s ease;
+}
+.admin-act:hover{background:rgba(255,255,255,.26)}
+body:has(.admin-bar:not([style*="none"])) .chips-wrap{top:120px}
+
+.comment{position:relative}
+.cmt-del{
+  margin-left:auto;flex:none;align-self:flex-start;
+  width:26px;height:26px;border-radius:8px;color:var(--ink-50);
+  display:inline-flex;align-items:center;justify-content:center;
+  opacity:0;transition:opacity .15s ease,background .15s ease,color .15s ease;
+}
+.comment:hover .cmt-del,.cmt-del:focus-visible{opacity:1}
+.cmt-del:hover{background:rgba(230,0,35,.1);color:var(--red)}
+
+@media (max-width:620px){
+  .admin-bar{padding:8px 12px;font-size:12px;gap:8px}
+  .admin-bar #adminUntil{display:none}
+  .cmt-del{opacity:1}
+}

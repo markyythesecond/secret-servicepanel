@@ -49,10 +49,19 @@
   </div>
 </header>
 
+<div class="admin-bar" id="adminBar" style="display:none">
+  <span class="admin-dot"></span>
+  <strong>Admin mode</strong>
+  <span id="adminUntil"></span>
+  <span class="admin-spacer"></span>
+  <button class="admin-act" id="adminRefresh">Reload pins</button>
+  <button class="admin-act" id="adminExit">Exit admin</button>
+</div>
+
 <main>
   <section class="hero">
     <h1>Discovering <span class="cycle" id="cycle">dinner ideas</span> to try</h1>
-    <p>Save what you love, upload what you make, and leave a note on the ones worth coming back to.</p>
+    <p>Everything here was uploaded by someone who made it. Add yours, and leave a note on the ones worth coming back to.</p>
     <div class="hero-cta">
       <button class="btn btn-primary" id="exploreCta">Explore ideas</button>
       <button class="btn btn-secondary" id="createCta">Create a pin</button>
@@ -192,11 +201,33 @@
         <label for="aEmail">Email</label>
         <input id="aEmail" type="email" placeholder="you@example.com">
       </div>
-      <div class="note">No password, no server. Your profile is stored with your pins so comments have a name attached. Use “Log out” in the profile menu to switch names.</div>
+      <div class="note">No password needed. Your name is stored on this device so your pins and comments have an author. <a href="#admin" class="link" id="adminLink">Site admin?</a></div>
     </div>
     <div class="sheet-foot">
       <button class="btn btn-ghost" id="aLogout" style="display:none">Log out</button>
       <button class="btn btn-primary" id="aSubmit">Continue</button>
+    </div>
+  </div>
+</div>
+
+<div class="scrim" id="adminScrim" role="dialog" aria-modal="true" aria-label="Admin login">
+  <div class="sheet" style="max-width:400px">
+    <div class="sheet-head">
+      <h2>Admin login</h2>
+      <button class="icon-btn" id="adminClose" aria-label="Close">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg>
+      </button>
+    </div>
+    <div class="sheet-body">
+      <div class="field">
+        <label for="adminPass">Admin password</label>
+        <input id="adminPass" type="password" autocomplete="current-password" placeholder="••••••••••••">
+        <div class="hint" id="adminHint">Ask the site owner if you do not have this.</div>
+      </div>
+      <div class="note">The password is checked on the server. Admins can remove any pin or comment. Sessions last 8 hours.</div>
+    </div>
+    <div class="sheet-foot">
+      <button class="btn btn-primary" id="adminSubmit">Log in as admin</button>
     </div>
   </div>
 </div>

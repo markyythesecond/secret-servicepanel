@@ -1,881 +1,545 @@
 /* =====================================================================
-   app.js — library browser + player.
-
-   Two backends behind one interface:
-     DirectSource    .mkv straight off WebDAV / File Station
-     JellyfinSource  Jellyfin on the NAS demuxes and serves HLS
-
-   Only JellyfinSource can switch audio tracks embedded inside an MKV.
-   That is a browser limitation, not a gap in this code: the HTMLMediaElement
-   audioTracks API is unimplemented in Chrome and Firefox, so nothing running
-   in the page can reach a second audio stream inside a container.
+   app.js — video gallery.
+   Finds every video in the repo's videos/ folder through the GitHub API,
+   shows them as thumbnail cards, plays them in a pop-up player that closes
+   itself when the video ends. You shouldn't need to edit this file;
+   settings live in config.js.
    ===================================================================== */
 (function () {
 "use strict";
 
-const CFG = window.ANIME_CONFIG || {};
-const $  = s => document.querySelector(s);
-const $$ = s => [...document.querySelectorAll(s)];
+const CFG = Object.assign({
+  title: "Video Archive", tagline: "", theme: "classified", sfx: true,
+  github: { owner: "", repo: "", branch: "main", folder: "videos" }
+}, window.SITE || {});
+const GH = CFG.github;
 
-const state = {
-  source: null,
-  series: [],
-  current: { series: null, seasonIdx: 0, episode: null },
-  art: null,
-  octopus: null,
-  hls: null,
-  altAudio: null,       // <audio> used for sidecar dubs in direct mode
-  driftTimer: null,
-  subOffset: 0,
-  currentSubId: undefined,
-  gain: null            // WebAudio node for volume boost past 100%
+const $ = s => document.querySelector(s);
+const VIDEO_EXT = ["mp4", "webm", "mov", "m4v", "ogv"];
+const IMAGE_EXT = ["jpg", "jpeg", "png", "webp", "gif"];
+const REDUCED = matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+const store = {
+  get(k, d) { try { const v = localStorage.getItem(k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } },
+  set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) { /* full or blocked */ } }
 };
 
-const PROGRESS_KEY = "ap:progress";
-const JF_KEY = "ap:jellyfin";
-
-/* ------------------------------ utils ------------------------------ */
-const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;" }[c]));
-const hhmm = s => {
-  if (!s || !isFinite(s)) return "";
-  const h = Math.floor(s / 3600), m = Math.round((s % 3600) / 60);
-  return h ? `${h}h ${m}m` : `${m}m`;
-};
+const esc = s => String(s).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+const ext = p => (p.split(".").pop() || "").toLowerCase();
+const stem = p => p.replace(/\.[^./]+$/, "");
+const encPath = p => p.split("/").map(encodeURIComponent).join("/");
 const clock = s => {
-  if (!isFinite(s)) return "0:00";
-  const m = Math.floor(s / 60), x = Math.floor(s % 60);
-  return `${m}:${String(x).padStart(2, "0")}`;
+  if (!isFinite(s)) return "";
+  s = Math.round(s);
+  const h = Math.floor(s / 3600), m = Math.floor(s % 3600 / 60), x = s % 60;
+  return (h ? h + ":" + String(m).padStart(2, "0") : m) + ":" + String(x).padStart(2, "0");
 };
+const prettify = name => name.replace(/[_-]+/g, " ").replace(/\s+/g, " ").trim();
 
-let toastTimer;
-function toast(msg, ms = 3200) {
+let toastT;
+function toast(msg, ms = 2800) {
   const t = $("#toast");
-  t.textContent = msg;
-  t.classList.add("show");
-  clearTimeout(toastTimer);
-  toastTimer = setTimeout(() => t.classList.remove("show"), ms);
+  t.textContent = msg; t.classList.add("show");
+  clearTimeout(toastT); toastT = setTimeout(() => t.classList.remove("show"), ms);
 }
 
-function progressAll() {
-  try { return JSON.parse(localStorage.getItem(PROGRESS_KEY)) || {}; } catch (e) { return {}; }
-}
-function saveProgress(key, time, duration) {
-  if (!key || !isFinite(time) || !duration) return;
-  const all = progressAll();
-  if (time / duration > 0.93) delete all[key];          // finished, drop it
-  else all[key] = { t: time, d: duration, at: Date.now() };
-  try { localStorage.setItem(PROGRESS_KEY, JSON.stringify(all)); } catch (e) {}
-}
-const getProgress = key => progressAll()[key] || null;
+/* ============================ sound effects ============================ */
+const SFX = (() => {
+  let ctx, master, enabled = store.get("ssp:sfx", CFG.sfx);
+  const wave = () => ({ classified: "triangle", neon: "sawtooth", crimson: "square", terminal: "square", daylight: "sine" }[document.documentElement.dataset.theme] || "triangle");
 
-/* A stable key per episode so resume survives reloads. */
-const epKey = (series, ep) => `${series.id}::${ep.seasonIdx ?? 0}::${ep.n}`;
-
-/* Deterministic colour so series without art still look intentional. */
-function coverGradient(title) {
-  let h = 0;
-  for (let i = 0; i < title.length; i++) h = (h * 31 + title.charCodeAt(i)) >>> 0;
-  const a = h % 360, b = (a + 48) % 360;
-  return `linear-gradient(140deg, hsl(${a} 55% 32%), hsl(${b} 60% 20%))`;
-}
-
-/* =====================================================================
-   SOURCE: DIRECT  (WebDAV / File Station)
-   ===================================================================== */
-const DirectSource = {
-  name: "direct",
-  canSwitchEmbeddedAudio: false,
-
-  url(path) {
-    if (/^https?:\/\//i.test(path)) return path;
-    const base = (CFG.nas?.baseUrl || "").replace(/\/+$/, "");
-    return base + "/" + String(path).split("/").map(encodeURIComponent).join("/");
-  },
-
-  async library() {
-    return (CFG.library || []).map(s => ({
-      ...s,
-      seasons: (s.seasons || []).map((season, si) => ({
-        ...season,
-        episodes: (season.episodes || []).map(e => ({ ...e, seasonIdx: si }))
-      }))
-    }));
-  },
-
-  /* Returns everything the player needs for one episode. */
-  async playback(series, ep) {
-    const subs = (ep.subtitles || []).map((s, i) => ({
-      id: "sub" + i, label: s.label || s.lang || `Track ${i + 1}`,
-      url: this.url(s.file),
-      format: /\.(ass|ssa)$/i.test(s.file) ? "ass" : "vtt",
-      default: !!s.default
-    }));
-
-    const audio = (ep.audio || []).map((a, i) => ({
-      id: "aud" + i, label: a.label || a.lang || `Track ${i + 1}`,
-      embedded: !!a.embedded,
-      url: a.file ? this.url(a.file) : null
-    }));
-
-    return {
-      type: "file",
-      src: this.url(ep.file),
-      mime: "video/x-matroska",
-      subtitles: subs,
-      audio: audio.length ? audio : [{ id: "aud0", label: "Default", embedded: true, url: null }],
-      thumbnails: ep.thumbnails ? this.url(ep.thumbnails) : null,
-      intro: ep.intro || null,
-      duration: ep.duration || 0
-    };
-  }
-};
-
-/* =====================================================================
-   SOURCE: JELLYFIN
-   The server demuxes, so audio and subtitle tracks arrive as real,
-   independently selectable streams.
-   ===================================================================== */
-const JellyfinSource = {
-  name: "jellyfin",
-  canSwitchEmbeddedAudio: true,
-  auth: null,
-
-  get base() { return (CFG.jellyfin?.serverUrl || "").replace(/\/+$/, ""); },
-
-  loadAuth() {
-    try { this.auth = JSON.parse(localStorage.getItem(JF_KEY)); } catch (e) { this.auth = null; }
-    if (!this.auth && CFG.jellyfin?.apiKey) {
-      this.auth = { token: CFG.jellyfin.apiKey, userId: null, name: "API key" };
+  function ac() {
+    if (!ctx) {
+      const AC = window.AudioContext || window.webkitAudioContext;
+      if (!AC) return null;
+      ctx = new AC();
+      master = ctx.createGain(); master.gain.value = 0.5;
+      const comp = ctx.createDynamicsCompressor();
+      master.connect(comp).connect(ctx.destination);
     }
-    return this.auth;
-  },
+    if (ctx.state === "suspended") ctx.resume();
+    return ctx;
+  }
+  function tone(f, dur, { type, vol = 0.12, to, delay = 0 } = {}) {
+    const c = ac(); if (!c || !enabled) return;
+    const t = c.currentTime + delay;
+    const o = c.createOscillator(), g = c.createGain(), lp = c.createBiquadFilter();
+    o.type = type || wave();
+    o.frequency.setValueAtTime(f, t);
+    if (to) o.frequency.exponentialRampToValueAtTime(to, t + dur);
+    lp.type = "lowpass"; lp.frequency.value = o.type === "sine" ? 8000 : 3200;
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.exponentialRampToValueAtTime(vol, t + 0.008);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    o.connect(lp).connect(g).connect(master);
+    o.start(t); o.stop(t + dur + 0.02);
+  }
+  function whoosh(dur, from, to, vol = 0.16) {
+    const c = ac(); if (!c || !enabled) return;
+    const t = c.currentTime, len = Math.ceil(c.sampleRate * dur);
+    const buf = c.createBuffer(1, len, c.sampleRate), d = buf.getChannelData(0);
+    for (let i = 0; i < len; i++) d[i] = Math.random() * 2 - 1;
+    const src = c.createBufferSource(), bp = c.createBiquadFilter(), g = c.createGain();
+    src.buffer = buf; bp.type = "bandpass"; bp.Q.value = 1.4;
+    bp.frequency.setValueAtTime(from, t); bp.frequency.exponentialRampToValueAtTime(to, t + dur);
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.exponentialRampToValueAtTime(vol, t + dur * 0.35);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    src.connect(bp).connect(g).connect(master); src.start(t);
+  }
+  let lastHover = 0;
+  return {
+    get on() { return enabled; },
+    set on(v) { enabled = v; store.set("ssp:sfx", v); },
+    unlock: ac,
+    hover() { const n = performance.now(); if (n - lastHover < 60) return; lastHover = n; tone(1600, 0.045, { vol: 0.035, type: "sine" }); },
+    click() { tone(520, 0.07, { vol: 0.09 }); tone(780, 0.09, { vol: 0.07, delay: 0.05 }); },
+    open() { whoosh(0.45, 300, 3500); tone(220, 0.35, { to: 660, vol: 0.07 }); tone(880, 0.25, { vol: 0.05, delay: 0.3, type: "sine" }); },
+    close() { whoosh(0.35, 3000, 250, 0.12); tone(600, 0.25, { to: 180, vol: 0.06 }); },
+    end() { [784, 659, 523, 392].forEach((f, i) => tone(f, 0.28, { vol: 0.07, delay: i * 0.11, type: "sine" })); },
+    theme() { [523, 659, 784, 1046].forEach((f, i) => tone(f, 0.18, { vol: 0.07, delay: i * 0.06 })); },
+    toggle() { tone(440, 0.06, { vol: 0.08 }); tone(880, 0.08, { vol: 0.06, delay: 0.06 }); },
+    chip() { tone(1100, 0.06, { vol: 0.06, type: "sine" }); },
+    error() { tone(160, 0.25, { vol: 0.1, type: "square" }); }
+  };
+})();
 
-  authHeader() {
-    const device = "AnimePortal";
-    const t = this.auth?.token ? `, Token="${this.auth.token}"` : "";
-    return `MediaBrowser Client="${device}", Device="Browser", DeviceId="ap-web", Version="1.0.0"${t}`;
-  },
+/* ============================ themes ============================ */
+const THEMES = [
+  { id: "classified", name: "Classified", sw: ["#070b14", "#d4af5f", "#7fa2d6"] },
+  { id: "neon",       name: "Neon",       sw: ["#07040f", "#ff3fc8", "#2ef2ff"] },
+  { id: "crimson",    name: "Crimson",    sw: ["#0c0506", "#e63946", "#f4a261"] },
+  { id: "terminal",   name: "Terminal",   sw: ["#020803", "#39ff78", "#c6ff3a"] },
+  { id: "daylight",   name: "Daylight",   sw: ["#f3f1ec", "#2b54d6", "#d4593a"] }
+];
+function applyTheme(id, fx) {
+  if (!THEMES.some(t => t.id === id)) id = "classified";
+  document.documentElement.dataset.theme = id;
+  store.set("ssp:theme", id);
+  document.querySelectorAll("#themes button").forEach(b => b.setAttribute("aria-checked", b.dataset.id === id));
+  BG.recolor();
+  if (fx) { flash(); SFX.theme(); }
+}
+function buildThemeMenu() {
+  const m = $("#themes");
+  m.innerHTML = THEMES.map(t =>
+    `<button role="menuitemradio" data-id="${t.id}" aria-checked="false">
+       <span class="sw">${t.sw.map(c => `<i style="background:${c}"></i>`).join("")}</span>${t.name}
+     </button>`).join("");
+  m.addEventListener("click", e => {
+    const b = e.target.closest("button"); if (!b) return;
+    applyTheme(b.dataset.id, true); m.classList.remove("open");
+  });
+  $("#themeBtn").addEventListener("click", e => {
+    e.stopPropagation(); SFX.click(); m.classList.toggle("open");
+  });
+  document.addEventListener("click", e => { if (!m.contains(e.target)) m.classList.remove("open"); });
+}
+function flash() {
+  if (REDUCED) return;
+  const f = $("#flash"); f.classList.remove("go"); void f.offsetWidth; f.classList.add("go");
+}
 
-  async api(path, opts = {}) {
-    const r = await fetch(this.base + path, {
-      ...opts,
-      headers: {
-        "Content-Type": "application/json",
-        "X-Emby-Authorization": this.authHeader(),
-        ...(opts.headers || {})
-      }
-    });
-    if (r.status === 401) { this.logout(); throw new Error("Session expired. Sign in again."); }
-    if (!r.ok) throw new Error(`Jellyfin returned ${r.status}`);
-    return r.status === 204 ? null : r.json();
-  },
-
-  async login(username, password) {
-    const r = await fetch(this.base + "/Users/AuthenticateByName", {
-      method: "POST",
-      headers: { "Content-Type": "application/json", "X-Emby-Authorization": this.authHeader() },
-      body: JSON.stringify({ Username: username, Pw: password })
-    });
-    if (r.status === 401) throw new Error("Wrong username or password.");
-    if (!r.ok) throw new Error(`Could not reach Jellyfin (${r.status}).`);
-    const d = await r.json();
-    this.auth = { token: d.AccessToken, userId: d.User.Id, name: d.User.Name };
-    localStorage.setItem(JF_KEY, JSON.stringify(this.auth));
-    return this.auth;
-  },
-
-  logout() {
-    this.auth = null;
-    try { localStorage.removeItem(JF_KEY); } catch (e) {}
-  },
-
-  async library() {
-    if (!this.auth?.userId) return [];
-    const res = await this.api(
-      `/Users/${this.auth.userId}/Items?IncludeItemTypes=Series&Recursive=true` +
-      `&Fields=Overview,Genres,ProductionYear&SortBy=SortName&Limit=500`
-    );
-    return (res.Items || []).map(it => ({
-      id: it.Id,
-      title: it.Name,
-      year: it.ProductionYear,
-      genres: it.Genres || [],
-      synopsis: it.Overview || "",
-      poster: it.ImageTags?.Primary
-        ? `${this.base}/Items/${it.Id}/Images/Primary?maxHeight=450&tag=${it.ImageTags.Primary}`
-        : "",
-      seasons: null,           // filled lazily by loadSeasons
-      _lazy: true
+/* ============================ background particles ============================ */
+const BG = (() => {
+  const cv = $("#fx"), cx = cv.getContext("2d");
+  let W, H, dpr, pts = [], rgb = "212,175,95", mouse = { x: -999, y: -999 };
+  function size() {
+    dpr = Math.min(devicePixelRatio || 1, 2);
+    W = cv.width = innerWidth * dpr; H = cv.height = innerHeight * dpr;
+    const n = Math.min(90, Math.round(innerWidth * innerHeight / 18000));
+    pts = Array.from({ length: n }, () => ({
+      x: Math.random() * W, y: Math.random() * H,
+      vx: (Math.random() - .5) * .25 * dpr, vy: (Math.random() - .5) * .25 * dpr,
+      r: (Math.random() * 1.4 + .4) * dpr
     }));
-  },
-
-  async loadSeasons(series) {
-    const seasons = await this.api(`/Shows/${series.id}/Seasons?userId=${this.auth.userId}`);
-    const out = [];
-    for (const [si, s] of (seasons.Items || []).entries()) {
-      const eps = await this.api(
-        `/Shows/${series.id}/Episodes?seasonId=${s.Id}&userId=${this.auth.userId}` +
-        `&Fields=Overview,MediaSources,RunTimeTicks`
-      );
-      out.push({
-        title: s.Name,
-        episodes: (eps.Items || []).map(e => ({
-          id: e.Id,
-          n: e.IndexNumber ?? 0,
-          title: e.Name,
-          desc: e.Overview || "",
-          seasonIdx: si,
-          duration: e.RunTimeTicks ? e.RunTimeTicks / 1e7 : 0,
-          thumb: e.ImageTags?.Primary
-            ? `${this.base}/Items/${e.Id}/Images/Primary?maxHeight=140&tag=${e.ImageTags.Primary}`
-            : "",
-          _mediaSourceId: e.MediaSources?.[0]?.Id,
-          _streams: e.MediaSources?.[0]?.MediaStreams || []
-        }))
-      });
+  }
+  function frame() {
+    cx.clearRect(0, 0, W, H);
+    const link = 130 * dpr;
+    for (const p of pts) {
+      p.x += p.vx; p.y += p.vy;
+      if (p.x < 0 || p.x > W) p.vx *= -1;
+      if (p.y < 0 || p.y > H) p.vy *= -1;
+      const dx = p.x - mouse.x, dy = p.y - mouse.y, dm = Math.hypot(dx, dy);
+      if (dm < 140 * dpr) { p.x += dx / dm * .8; p.y += dy / dm * .8; }
     }
-    return out;
-  },
-
-  async playback(series, ep) {
-    const streams = ep._streams || [];
-    const msId = ep._mediaSourceId || ep.id;
-
-    const audio = streams.filter(s => s.Type === "Audio").map(s => ({
-      id: String(s.Index),
-      index: s.Index,
-      label: s.DisplayTitle || s.Language || `Audio ${s.Index}`,
-      embedded: true,
-      url: null
-    }));
-
-    // Subtitles come out as sidecar files, which is exactly what libass wants.
-    const subtitles = streams.filter(s => s.Type === "Subtitle").map(s => {
-      const ass = /ass|ssa/i.test(s.Codec || "");
-      return {
-        id: String(s.Index),
-        index: s.Index,
-        label: s.DisplayTitle || s.Language || `Subtitle ${s.Index}`,
-        url: `${this.base}/Videos/${ep.id}/${msId}/Subtitles/${s.Index}/0/Stream.${ass ? "ass" : "vtt"}?api_key=${this.auth.token}`,
-        format: ass ? "ass" : "vtt",
-        default: !!s.IsDefault
-      };
-    });
-
-    const build = audioIndex => {
-      const p = new URLSearchParams({
-        MediaSourceId: msId,
-        api_key: this.auth.token,
-        VideoCodec: "h264",
-        AudioCodec: "aac",
-        MaxStreamingBitrate: String(CFG.jellyfin?.maxBitrate || 20000000),
-        TranscodingContainer: "ts",
-        TranscodingProtocol: "hls",
-        SegmentContainer: "ts",
-        MinSegments: "1",
-        BreakOnNonKeyFrames: "true"
-      });
-      if (audioIndex != null) p.set("AudioStreamIndex", String(audioIndex));
-      return `${this.base}/Videos/${ep.id}/master.m3u8?${p}`;
-    };
-
-    return {
-      type: "hls",
-      src: build(audio[0]?.index),
-      buildSrc: build,                   // re-called when the audio track changes
-      audio: audio.length ? audio : [{ id: "0", index: null, label: "Default", embedded: true }],
-      subtitles,
-      thumbnails: null,
-      intro: null,
-      duration: ep.duration || 0
-    };
-  }
-};
-
-/* =====================================================================
-   SUBTITLES (libass / SubtitlesOctopus)
-   ===================================================================== */
-/* MUST be same-origin. Browsers throw SecurityError on new Worker() with a
-   cross-origin URL, so the libass worker cannot be loaded from a CDN — it has
-   to live in your repo. See SETUP.md step 2. */
-/* Absolute, because relative URLs inside a Worker resolve against the WORKER's
-   location, not the page's — a relative path silently 404s the font. */
-const abs = p => new URL(p, location.href).href;
-const OCTOPUS_WORKER = abs((window.ANIME_CONFIG?.subtitleWorker) || "vendor/libass/subtitles-octopus-worker.js");
-const OCTOPUS_FONT   = abs((window.ANIME_CONFIG?.subtitleFont)   || "vendor/libass/default.woff2");
-let octopusChecked = false, octopusOk = false;
-
-async function octopusAvailable() {
-  if (octopusChecked) return octopusOk;
-  octopusChecked = true;
-  try {
-    const r = await fetch(OCTOPUS_WORKER, { method: "HEAD" });
-    octopusOk = r.ok;
-  } catch (e) { octopusOk = false; }
-  if (!octopusOk) {
-    toast("ASS subtitles need the libass files in vendor/libass/ — see SETUP.md step 2.", 6000);
-  }
-  return octopusOk;
-}
-
-function destroySubs() {
-  if (state.octopus) { try { state.octopus.dispose(); } catch (e) {} state.octopus = null; }
-}
-
-async function mountSubs(video, track) {
-  // ArtPlayer fires onSelect for the default item during init, which races the
-  // "ready" handler. Without this guard the second call disposes the first
-  // worker mid-boot and subtitles silently never appear.
-  const id = track ? track.id : null;
-  if (id === state.currentSubId && (state.octopus || !id)) return;
-  state.currentSubId = id;
-
-  destroySubs();
-  if (!track) return;
-
-  if (track.format === "ass") {
-    if (typeof SubtitlesOctopus === "undefined") { toast("Subtitle renderer failed to load."); return; }
-    if (!(await octopusAvailable())) return;
-    try {
-      state.octopus = new SubtitlesOctopus({
-        video,
-        subUrl: track.url,
-        workerUrl: OCTOPUS_WORKER,
-        // libass needs a real font file. The npm package does not ship one,
-        // so it must be vendored alongside the worker or nothing renders.
-        fallbackFont: OCTOPUS_FONT,
-        // legacyWorkerUrl left unset: every browser we target has WebAssembly
-        timeOffset: state.subOffset,
-        onError: () => toast("Could not load that subtitle file. Check CORS on the NAS.")
-      });
-    } catch (e) {
-      toast("Subtitle renderer failed to start.");
-    }
-    return;
-  }
-
-  // VTT / SRT path: let the browser render it natively
-  [...video.querySelectorAll("track")].forEach(t => t.remove());
-  const t = document.createElement("track");
-  t.kind = "subtitles"; t.label = track.label; t.src = track.url; t.default = true;
-  video.appendChild(t);
-  setTimeout(() => { if (video.textTracks[0]) video.textTracks[0].mode = "showing"; }, 60);
-}
-
-function setSubOffset(sec) {
-  state.subOffset = sec;
-  if (state.octopus) { try { state.octopus.timeOffset = sec; } catch (e) {} }
-}
-
-/* =====================================================================
-   SIDECAR DUB SYNC  (direct mode only)
-   Plays a separate audio file locked to the video clock. Not as clean as
-   real track switching, but it is the only way to get a dub in direct mode.
-   ===================================================================== */
-function stopAltAudio(video) {
-  clearInterval(state.driftTimer); state.driftTimer = null;
-  if (state.altAudio) { state.altAudio.pause(); state.altAudio.src = ""; state.altAudio = null; }
-  if (video) video.muted = false;
-}
-
-function startAltAudio(video, url) {
-  stopAltAudio(video);
-  const a = new Audio(url);
-  a.preload = "auto";
-  a.crossOrigin = CFG.nas?.withCredentials ? "use-credentials" : "anonymous";
-  state.altAudio = a;
-  video.muted = true;
-
-  const sync = () => { if (Math.abs(a.currentTime - video.currentTime) > 0.3) a.currentTime = video.currentTime; };
-  a.addEventListener("loadedmetadata", () => { sync(); if (!video.paused) a.play().catch(() => {}); });
-  video.addEventListener("play",  () => { sync(); a.play().catch(() => {}); });
-  video.addEventListener("pause", () => a.pause());
-  video.addEventListener("seeked", sync);
-  video.addEventListener("ratechange", () => { a.playbackRate = video.playbackRate; });
-  state.driftTimer = setInterval(sync, 1000);
-}
-
-/* =====================================================================
-   VOLUME BOOST  (WebAudio gain above 1.0)
-   ===================================================================== */
-function ensureGain(video) {
-  if (state.gain) return state.gain;
-  try {
-    const ctx = new (window.AudioContext || window.webkitAudioContext)();
-    const src = ctx.createMediaElementSource(video);
-    const g = ctx.createGain();
-    src.connect(g); g.connect(ctx.destination);
-    state.gain = { ctx, node: g };
-    return state.gain;
-  } catch (e) { return null; }   // cross-origin media without CORS headers blocks this
-}
-
-/* =====================================================================
-   PLAYER
-   ===================================================================== */
-async function playEpisode(series, ep) {
-  let pb;
-  try {
-    pb = await state.source.playback(series, ep);
-  } catch (e) {
-    return toast(e.message || "Could not prepare that episode.");
-  }
-
-  state.current = { series, seasonIdx: ep.seasonIdx ?? 0, episode: ep };
-  showView("player");
-
-  $("#nowSeries").textContent = series.title;
-  $("#nowTitle").textContent  = `Episode ${ep.n}${ep.title ? " · " + ep.title : ""}`;
-  $("#nowDesc").textContent   = ep.desc || series.synopsis || "";
-
-  renderEpisodes();
-  renderTrackInfo(pb);
-
-  const key = epKey(series, ep);
-  const resume = getProgress(key);
-
-  state.currentSubId = undefined;
-  destroySubs();
-  if (state.hls) { state.hls.destroy(); state.hls = null; }
-  if (state.art) { try { state.art.destroy(false); } catch (e) {} state.art = null; }
-
-  const defaultSub = pb.subtitles.find(s => s.default) || pb.subtitles[0] || null;
-
-  const art = new Artplayer({
-    container: "#player",
-    url: pb.src,
-    type: pb.type === "hls" ? "m3u8" : "",
-    volume: 1,
-    autoplay: false,
-    pip: true,
-    setting: true,
-    playbackRate: true,
-    fullscreen: true,
-    fullscreenWeb: true,
-    miniProgressBar: true,
-    autoOrientation: true,
-    airplay: true,
-    theme: CFG.site?.accent || "#8b5cf6",
-    moreVideoAttr: {
-      crossOrigin: CFG.nas?.withCredentials ? "use-credentials" : "anonymous",
-      playsInline: true
-    },
-
-    customType: {
-      m3u8: (video, url) => {
-        if (video.canPlayType("application/vnd.apple.mpegurl")) { video.src = url; return; }
-        if (!window.Hls || !Hls.isSupported()) { toast("HLS is not supported in this browser."); return; }
-        const hls = new Hls({ maxBufferLength: 30, enableWorker: true });
-        hls.loadSource(url); hls.attachMedia(video);
-        hls.on(Hls.Events.ERROR, (_, d) => { if (d.fatal) toast("Stream error: " + d.details); });
-        state.hls = hls;
-      }
-    },
-
-    // ±10s, speed, boost and offset live here
-    controls: [
-      {
-        name: "back10", position: "left", index: 12,
-        html: '<span style="font-size:12px;font-weight:700">-10s</span>',
-        tooltip: "Back 10 seconds",
-        click: () => { art.currentTime = Math.max(0, art.currentTime - 10); }
-      },
-      {
-        name: "fwd10", position: "left", index: 13,
-        html: '<span style="font-size:12px;font-weight:700">+10s</span>',
-        tooltip: "Forward 10 seconds",
-        click: () => { art.currentTime = Math.min(art.duration, art.currentTime + 10); }
-      }
-    ],
-
-    settings: [
-      /* ---- audio ---- */
-      {
-        width: 260,
-        html: "Audio",
-        tooltip: pb.audio[0]?.label || "Default",
-        selector: pb.audio.map((a, i) => ({ ...a, html: a.label, default: i === 0 })),
-        onSelect: item => { switchAudio(art, pb, item); return item.html; }
-      },
-      /* ---- subtitles ---- */
-      {
-        width: 260,
-        html: "Subtitles",
-        tooltip: defaultSub ? defaultSub.label : "Off",
-        selector: [
-          { html: "Off", url: null, default: !defaultSub },
-          ...pb.subtitles.map(s => ({ ...s, html: s.label, default: defaultSub && s.id === defaultSub.id }))
-        ],
-        onSelect: item => { mountSubs(art.video, item.url ? item : null); return item.html; }
-      },
-      /* ---- subtitle offset ---- */
-      {
-        html: "Subtitle delay",
-        tooltip: "0.0s",
-        selector: [-2, -1, -0.5, 0, 0.5, 1, 2].map(v => ({
-          html: (v > 0 ? "+" : "") + v.toFixed(1) + "s", value: v, default: v === 0
-        })),
-        onSelect: item => { setSubOffset(item.value); return item.html; }
-      },
-      /* ---- volume boost ---- */
-      {
-        html: "Volume boost",
-        tooltip: "Off",
-        selector: [1, 1.5, 2, 3].map(v => ({ html: v === 1 ? "Off" : v + "x", value: v, default: v === 1 })),
-        onSelect: item => {
-          const g = ensureGain(art.video);
-          if (!g) { toast("Boost needs CORS headers on the media host."); return "Off"; }
-          g.ctx.resume();
-          g.node.gain.value = item.value;
-          return item.html;
+    for (let i = 0; i < pts.length; i++) {
+      const a = pts[i];
+      cx.fillStyle = `rgba(${rgb},.55)`;
+      cx.beginPath(); cx.arc(a.x, a.y, a.r, 0, 7); cx.fill();
+      for (let j = i + 1; j < pts.length; j++) {
+        const b = pts[j], d = Math.hypot(a.x - b.x, a.y - b.y);
+        if (d < link) {
+          cx.strokeStyle = `rgba(${rgb},${(1 - d / link) * .18})`;
+          cx.lineWidth = dpr * .8;
+          cx.beginPath(); cx.moveTo(a.x, a.y); cx.lineTo(b.x, b.y); cx.stroke();
         }
       }
-    ]
-  });
-
-  state.art = art;
-
-  art.on("ready", () => {
-    if (resume && resume.t > 10) {
-      art.currentTime = resume.t;
-      toast(`Resumed at ${clock(resume.t)}`);
     }
-    if (defaultSub) mountSubs(art.video, defaultSub);
-    if (pb.thumbnails) { try { art.thumbnails.url = pb.thumbnails; } catch (e) {} }
+    if (!document.hidden && !paused) requestAnimationFrame(frame);
+  }
+  let paused = false;
+  addEventListener("resize", size);
+  addEventListener("pointermove", e => { mouse.x = e.clientX * dpr; mouse.y = e.clientY * dpr; });
+  document.addEventListener("visibilitychange", () => { if (!document.hidden && !paused) requestAnimationFrame(frame); });
+  return {
+    start() { size(); if (REDUCED) { paused = true; frame(); } else requestAnimationFrame(frame); },
+    pause(v) { const was = paused; paused = v || REDUCED; if (was && !paused) requestAnimationFrame(frame); },
+    recolor() { rgb = getComputedStyle(document.documentElement).getPropertyValue("--particle").trim() || rgb; }
+  };
+})();
 
-    // "Skip intro" appears only while inside the configured window
-    if (pb.intro) {
-      const btn = document.createElement("button");
-      btn.className = "btn-accent";
-      btn.textContent = "Skip intro";
-      btn.style.cssText = "position:absolute;right:20px;bottom:76px;z-index:60;display:none";
-      btn.onclick = () => { art.currentTime = pb.intro[1]; btn.style.display = "none"; };
-      art.template.$player.appendChild(btn);
-      art.on("video:timeupdate", () => {
-        const t = art.currentTime;
-        btn.style.display = (t >= pb.intro[0] && t < pb.intro[1]) ? "block" : "none";
+/* ============================ loading the video list ============================ */
+async function loadVideos() {
+  const CACHE = "ssp:tree:" + GH.owner + "/" + GH.repo;
+  const cached = store.get(CACHE, null);
+  if (cached && Date.now() - cached.t < 60 * 1000) return cached.items;
+
+  try {
+    if (!GH.owner || !GH.repo) throw new Error("no repo set");
+    const r = await fetch(`https://api.github.com/repos/${GH.owner}/${GH.repo}/git/trees/${encodeURIComponent(GH.branch)}?recursive=1`,
+      { headers: { Accept: "application/vnd.github+json" } });
+    if (!r.ok) throw new Error("GitHub API " + r.status);
+    const items = fromTree((await r.json()).tree || []);
+    store.set(CACHE, { t: Date.now(), items });
+    return items;
+  } catch (err) {
+    console.warn("[videos] GitHub API failed:", err);
+    if (cached) return cached.items;            // stale cache beats nothing
+    try {                                       // last resort: a hand-written videos.json
+      const r = await fetch("videos.json", { cache: "no-store" });
+      if (r.ok) return (await r.json()).map(v => typeof v === "string" ? { path: v } : v).map(normalize);
+    } catch (e) { /* none */ }
+    throw err;
+  }
+}
+function fromTree(tree) {
+  const root = GH.folder.replace(/^\/|\/$/g, "") + "/";
+  const files = tree.filter(n => n.type === "blob" && n.path.startsWith(root));
+  const images = new Map();
+  files.forEach(f => { if (IMAGE_EXT.includes(ext(f.path))) images.set(stem(f.path).toLowerCase(), f.path); });
+  return files
+    .filter(f => VIDEO_EXT.includes(ext(f.path)))
+    .map(f => normalize({ path: f.path, sha: f.sha, size: f.size, thumb: images.get(stem(f.path).toLowerCase()) }));
+}
+function normalize(v) {
+  const root = GH.folder.replace(/^\/|\/$/g, "") + "/";
+  const rel = v.path.startsWith(root) ? v.path.slice(root.length) : v.path;
+  const parts = rel.split("/");
+  const file = parts.pop();
+  return {
+    path: v.path,
+    src: v.src || encPath(v.path),
+    thumb: v.thumb ? (/^https?:/.test(v.thumb) ? v.thumb : encPath(v.thumb)) : "",
+    title: v.title || prettify(stem(file)),
+    category: v.category || parts.join(" / ") || "",
+    sha: v.sha || v.path,
+    size: v.size || 0
+  };
+}
+
+/* ============================ auto thumbnails ============================ */
+const Thumbs = (() => {
+  const queue = [];
+  let running = 0;
+  const KEY = "ssp:thumb:";
+  function grab(v) {
+    return new Promise(resolve => {
+      const vid = document.createElement("video");
+      vid.muted = true; vid.preload = "metadata"; vid.playsInline = true; vid.crossOrigin = "anonymous";
+      let done = false;
+      const finish = res => { if (done) return; done = true; vid.removeAttribute("src"); vid.load(); resolve(res); };
+      setTimeout(() => finish(null), 20000);
+      vid.addEventListener("loadedmetadata", () => {
+        const d = vid.duration;
+        vid.currentTime = isFinite(d) && d > 0 ? Math.min(d * 0.15, 8) : 1;
+      });
+      vid.addEventListener("seeked", () => {
+        try {
+          const w = 480, h = Math.round(w * (vid.videoHeight / vid.videoWidth || 9 / 16));
+          const c = document.createElement("canvas"); c.width = w; c.height = h;
+          c.getContext("2d").drawImage(vid, 0, 0, w, h);
+          finish({ img: c.toDataURL("image/jpeg", 0.72), dur: vid.duration });
+        } catch (e) { finish({ img: null, dur: vid.duration }); }
+      });
+      vid.addEventListener("error", () => finish(null));
+      vid.src = v.src;
+    });
+  }
+  function pump() {
+    while (running < 2 && queue.length) {
+      const { v, cb } = queue.shift();
+      running++;
+      grab(v).then(res => {
+        running--;
+        if (res) store.set(KEY + v.sha, res);
+        cb(res); pump();
       });
     }
-  });
-
-  let tick = 0;
-  art.on("video:timeupdate", () => {
-    if (++tick % 20) return;                       // roughly every 5s
-    saveProgress(key, art.currentTime, art.duration);
-  });
-
-  art.on("video:ended", () => {
-    saveProgress(key, 0, art.duration);
-    const next = neighbourEpisode(1);
-    if (next) playEpisode(series, next);
-  });
-
-  art.on("error", () => {
-    toast(pb.type === "file"
-      ? "The browser refused this file. The codecs inside are probably unsupported — see SETUP.md."
-      : "Playback failed. Check that Jellyfin is reachable.");
-  });
-}
-
-/* Audio switching differs completely between the two backends. */
-function switchAudio(art, pb, track) {
-  if (state.source.canSwitchEmbeddedAudio && pb.buildSrc) {
-    // Jellyfin: ask the server for the same video with a different audio index
-    const at = art.currentTime, wasPlaying = !art.video.paused;
-    const url = pb.buildSrc(track.index);
-    if (state.hls) { state.hls.destroy(); state.hls = null; }
-    art.switchUrl(url).then(() => {
-      art.currentTime = at;
-      if (wasPlaying) art.play();
-    });
-    return;
   }
+  return {
+    cached: v => store.get(KEY + v.sha, null),
+    request(v, cb) { queue.push({ v, cb }); pump(); }
+  };
+})();
 
-  // Direct mode
-  if (track.embedded) { stopAltAudio(art.video); return; }
-  if (track.url) { startAltAudio(art.video, track.url); return; }
-  toast("This track is inside the MKV and the browser cannot reach it.");
-}
+/* ============================ gallery ============================ */
+const state = { all: [], filter: "", cat: "" };
+const seen = new Set(store.get("ssp:seen", []));
 
-/* =====================================================================
-   RENDERING
-   ===================================================================== */
-function showView(which) {
-  $("#viewBrowse").classList.toggle("hidden", which !== "browse");
-  $("#viewPlayer").classList.toggle("hidden", which !== "player");
-  $("#pageTitle").textContent = which === "player" ? state.current.series?.title || "Now playing" : "Browse";
-  if (which === "browse") window.scrollTo({ top: 0 });
-}
+function render() {
+  const q = state.filter.trim().toLowerCase();
+  const list = state.all.filter(v =>
+    (!state.cat || v.category === state.cat) &&
+    (!q || v.title.toLowerCase().includes(q) || v.category.toLowerCase().includes(q)));
 
-function renderGrid(filter = "") {
-  const q = filter.trim().toLowerCase();
-  const list = state.series.filter(s =>
-    !q || (s.title + " " + (s.genres || []).join(" ")).toLowerCase().includes(q));
+  $("#count").textContent = `${list.length} file${list.length === 1 ? "" : "s"}`;
+  $("#empty").hidden = state.all.length > 0;
 
   const grid = $("#grid");
-  grid.innerHTML = "";
-  $("#browseEmpty").classList.toggle("hidden", list.length > 0);
-
-  if (!list.length) {
-    $("#browseEmptyMsg").textContent = q
-      ? `Nothing matches "${filter}".`
-      : state.source.name === "jellyfin"
-        ? "Sign in to your Jellyfin server to load the library."
-        : "Add your series to the library array in config.js.";
+  if (state.all.length && !list.length) {
+    grid.innerHTML = `<p style="grid-column:1/-1;color:var(--dim);text-align:center;padding:40px 0">Nothing matches “${esc(state.filter)}”.</p>`;
     return;
   }
+  grid.innerHTML = list.map((v, i) => `
+    <button class="card${seen.has(v.path) ? " seen" : ""}" style="--i:${Math.min(i, 20)}" data-path="${esc(v.path)}" aria-label="Play ${esc(v.title)}">
+      <div class="thumb">
+        <div class="ph"><span>Loading</span></div>
+        <img alt="" decoding="async">
+        ${v.category ? `<span class="tag">${esc(v.category)}</span>` : ""}
+        <span class="dur" hidden></span>
+        <span class="play"><svg viewBox="0 0 24 24"><path d="M7 4.5v15l13-7.5z"/></svg></span>
+      </div>
+      <div class="meta">
+        <h3 title="${esc(v.title)}">${esc(v.title)}</h3>
+        <p>${v.size ? (v.size / 1048576).toFixed(1) + " MB" : ext(v.path).toUpperCase()}</p>
+      </div>
+    </button>`).join("");
 
-  list.forEach(s => {
-    const count = (s.seasons || []).reduce((n, x) => n + x.episodes.length, 0);
-    const el = document.createElement("div");
-    el.className = "card";
-    el.innerHTML =
-      `<div class="card-art" style="background:${coverGradient(s.title)}">
-         ${s.poster ? `<img src="${esc(s.poster)}" alt="" loading="lazy" onerror="this.remove()">`
-                    : `<div class="card-fallback">${esc(s.title)}</div>`}
-         ${count ? `<span class="card-count">${count} ep</span>` : ""}
-       </div>
-       <div class="card-title">${esc(s.title)}</div>
-       <div class="card-sub">${[s.year, (s.genres || [])[0]].filter(Boolean).join(" · ")}</div>`;
-    el.onclick = () => openSeries(s);
-    grid.appendChild(el);
-  });
+  grid.querySelectorAll(".card").forEach(card => io.observe(card));
 }
 
-function renderSeriesList() {
-  const box = $("#seriesList");
-  box.innerHTML = "";
-  state.series.forEach(s => {
-    const b = document.createElement("button");
-    b.className = "series-row" + (state.current.series?.id === s.id ? " active" : "");
-    b.textContent = s.title;
-    b.onclick = () => { openSeries(s); closeSidebar(); };
-    box.appendChild(b);
-  });
-}
+function byPath(p) { return state.all.find(v => v.path === p); }
 
-async function openSeries(series) {
-  if (series._lazy && !series.seasons) {
-    toast("Loading episodes…");
-    try { series.seasons = await state.source.loadSeasons(series); }
-    catch (e) { return toast(e.message || "Could not load that series."); }
+const io = new IntersectionObserver(entries => {
+  entries.forEach(e => {
+    if (!e.isIntersecting) return;
+    io.unobserve(e.target);
+    fillThumb(e.target, byPath(e.target.dataset.path));
+  });
+}, { rootMargin: "300px" });
+
+function fillThumb(card, v) {
+  if (!v) return;
+  const img = card.querySelector("img"), ph = card.querySelector(".ph"), dur = card.querySelector(".dur");
+  const show = (src, d) => {
+    if (d && isFinite(d)) { dur.textContent = clock(d); dur.hidden = false; }
+    if (!src) { ph.classList.add("done"); ph.querySelector("span").textContent = ext(v.path).toUpperCase(); return; }
+    img.onload = () => { img.classList.add("ok"); ph.remove(); };
+    img.onerror = () => { ph.classList.add("done"); ph.querySelector("span").textContent = "No preview"; };
+    img.src = src;
+  };
+  const c = Thumbs.cached(v);
+  if (v.thumb) {
+    show(v.thumb, c && c.dur);
+    if (!c) Thumbs.request({ ...v, sha: v.sha }, res => res && show(null, res.dur) ); // just for duration
+    return;
   }
-  const eps = series.seasons?.[0]?.episodes || [];
-  if (!eps.length) return toast("That series has no episodes.");
-
-  // resume the furthest-watched episode if there is one
-  const all = progressAll();
-  const started = series.seasons.flatMap(s => s.episodes).filter(e => all[epKey(series, e)]);
-  playEpisode(series, started.length ? started[started.length - 1] : eps[0]);
-  renderSeriesList();
+  if (c && c.img) return show(c.img, c.dur);
+  Thumbs.request(v, res => show(res && res.img, res && res.dur));
 }
 
-function renderEpisodes() {
-  const { series, seasonIdx, episode } = state.current;
-  if (!series) return;
+function buildChips() {
+  const cats = [...new Set(state.all.map(v => v.category).filter(Boolean))].sort();
+  const box = $("#chips");
+  if (!cats.length) { box.innerHTML = ""; return; }
+  box.innerHTML = ["", ...cats].map(c =>
+    `<button class="chip" data-cat="${esc(c)}" aria-pressed="${c === state.cat}">${c ? esc(c) : "All"}</button>`).join("");
+}
 
-  const sel = $("#seasonSelect");
-  sel.innerHTML = series.seasons.map((s, i) =>
-    `<option value="${i}" ${i === seasonIdx ? "selected" : ""}>${esc(s.title)}</option>`).join("");
-
-  const eps = series.seasons[seasonIdx]?.episodes || [];
-  const box = $("#episodeList");
-  box.innerHTML = "";
-
-  eps.forEach(ep => {
-    const p = getProgress(epKey(series, ep));
-    const pct = p ? Math.min(100, (p.t / p.d) * 100) : 0;
-    const b = document.createElement("button");
-    b.className = "ep" + (episode && ep.n === episode.n && ep.seasonIdx === episode.seasonIdx ? " playing" : "");
-    b.innerHTML =
-      `<div class="ep-thumb">
-         ${ep.thumb ? `<img src="${esc(ep.thumb)}" alt="" loading="lazy" onerror="this.remove()">` : `E${ep.n}`}
-         ${pct ? `<span class="ep-progress" style="width:${pct}%"></span>` : ""}
-       </div>
-       <div style="min-width:0">
-         <div class="ep-title">${ep.n}. ${esc(ep.title || "Episode " + ep.n)}</div>
-         <div class="ep-meta">${[hhmm(ep.duration), p ? `${Math.round(pct)}% watched` : ""].filter(Boolean).join(" · ")}</div>
-       </div>`;
-    b.onclick = () => playEpisode(series, ep);
-    box.appendChild(b);
+/* ============================ card tilt ============================ */
+function tilt(grid) {
+  if (REDUCED) return;
+  grid.addEventListener("pointermove", e => {
+    const card = e.target.closest(".card"); if (!card) return;
+    const r = card.getBoundingClientRect();
+    const x = (e.clientX - r.left) / r.width, y = (e.clientY - r.top) / r.height;
+    card.style.setProperty("--ry", (x - .5) * 10 + "deg");
+    card.style.setProperty("--rx", (.5 - y) * 10 + "deg");
+    card.style.setProperty("--mx", x * 100 + "%");
+    card.style.setProperty("--my", y * 100 + "%");
   });
-
-  $("#prevEp").disabled = !neighbourEpisode(-1);
-  $("#nextEp").disabled = !neighbourEpisode(1);
+  grid.addEventListener("pointerout", e => {
+    const card = e.target.closest(".card");
+    if (card && !card.contains(e.relatedTarget)) { card.style.setProperty("--rx", "0deg"); card.style.setProperty("--ry", "0deg"); }
+  });
 }
 
-function neighbourEpisode(step) {
-  const { series, seasonIdx, episode } = state.current;
-  if (!series || !episode) return null;
-  const flat = series.seasons.flatMap(s => s.episodes);
-  const i = flat.findIndex(e => e.n === episode.n && e.seasonIdx === seasonIdx);
-  return i < 0 ? null : flat[i + step] || null;
-}
+/* ============================ player ============================ */
+const P = { el: $("#player"), frame: $("#frame"), video: $("#video"), from: null, current: null, closing: false };
 
-function renderTrackInfo(pb) {
-  const chips = [];
-  chips.push(`<span class="chip">Source <b>${state.source.name === "jellyfin" ? "Jellyfin (HLS)" : "Direct file"}</b></span>`);
-  chips.push(`<span class="chip">Audio tracks <b>${pb.audio.length}</b></span>`);
-  chips.push(`<span class="chip">Subtitles <b>${pb.subtitles.length || "none"}</b></span>`);
+function openPlayer(v, fromEl) {
+  SFX.unlock();
+  P.current = v; P.from = fromEl || null; P.closing = false;
+  $("#ptitle").textContent = v.title;
+  $("#prog").style.width = "0";
+  P.video.src = v.src;
+  P.el.hidden = false;
+  document.body.style.overflow = "hidden";
+  BG.pause(true);
+  requestAnimationFrame(() => P.el.classList.add("open"));
+  SFX.open(); flash();
 
-  if (state.source.name === "direct") {
-    const embeddedOnly = pb.audio.length > 1 && pb.audio.every(a => a.embedded);
-    if (embeddedOnly) {
-      chips.push(`<span class="chip warn">Embedded audio tracks cannot be switched in direct mode</span>`);
+  if (!REDUCED) {
+    const to = P.frame.getBoundingClientRect();
+    let start = "translateY(40px) scale(.85)";
+    if (P.from) {
+      const r = P.from.getBoundingClientRect();
+      start = `translate(${r.left + r.width / 2 - (to.left + to.width / 2)}px,${r.top + r.height / 2 - (to.top + to.height / 2)}px) scale(${r.width / to.width})`;
     }
-    if (!pb.subtitles.length) {
-      chips.push(`<span class="chip warn">Subtitles inside the MKV are invisible to the browser — add sidecar files</span>`);
-    }
+    P.frame.animate(
+      [{ transform: start, opacity: 0, filter: "blur(6px)" }, { transform: "none", opacity: 1, filter: "blur(0)" }],
+      { duration: 480, easing: "cubic-bezier(.2,.9,.25,1.05)" });
   }
-  $("#trackInfo").innerHTML = chips.join("");
+  const p = P.video.play();
+  if (p && p.catch) p.catch(() => { /* autoplay blocked: controls are visible, user can press play */ });
+  history.replaceState(null, "", "#" + encodeURIComponent(v.path));
 }
 
-/* =====================================================================
-   CONTINUE WATCHING
-   ===================================================================== */
-function renderContinue() {
-  const all = progressAll();
-  const rows = [];
-  state.series.forEach(s => (s.seasons || []).forEach(season => season.episodes.forEach(ep => {
-    const p = all[epKey(s, ep)];
-    if (p) rows.push({ s, ep, p });
-  })));
-  rows.sort((a, b) => b.p.at - a.p.at);
+function closePlayer(reason) {
+  if (P.el.hidden || P.closing) return;
+  P.closing = true;
+  reason === "ended" ? SFX.end() : SFX.close();
+  P.el.classList.remove("open");
+
+  const done = () => {
+    P.video.pause(); P.video.removeAttribute("src"); P.video.load();
+    P.el.hidden = true; P.closing = false;
+    document.body.style.overflow = "";
+    BG.pause(false);
+    history.replaceState(null, "", location.pathname + location.search);
+    if (P.from && document.contains(P.from)) P.from.focus({ preventScroll: true });
+  };
+  if (REDUCED) return done();
+
+  let end = "translateY(30px) scale(.9)";
+  if (P.from && document.contains(P.from)) {
+    const r = P.from.getBoundingClientRect(), to = P.frame.getBoundingClientRect();
+    end = `translate(${r.left + r.width / 2 - (to.left + to.width / 2)}px,${r.top + r.height / 2 - (to.top + to.height / 2)}px) scale(${r.width / to.width})`;
+  }
+  P.frame.animate(
+    [{ transform: "none", opacity: 1 }, { transform: end, opacity: 0, filter: "blur(4px)" }],
+    { duration: 380, easing: "cubic-bezier(.5,0,.75,0)" }).onfinish = done;
+}
+
+function markSeen(v) {
+  seen.add(v.path); store.set("ssp:seen", [...seen]);
+  const card = document.querySelector(`.card[data-path="${CSS.escape(v.path)}"]`);
+  if (card) card.classList.add("seen");
+}
+
+P.video.addEventListener("timeupdate", () => {
+  const d = P.video.duration;
+  if (d) $("#prog").style.width = (P.video.currentTime / d * 100) + "%";
+});
+P.video.addEventListener("ended", () => {
+  if (P.current) markSeen(P.current);
+  if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
+  if (document.webkitFullscreenElement && document.webkitExitFullscreen) document.webkitExitFullscreen();
+  setTimeout(() => closePlayer("ended"), 250);
+});
+P.video.addEventListener("webkitendfullscreen", () => { if (P.video.ended) closePlayer("ended"); });
+P.video.addEventListener("error", () => {
+  if (P.el.hidden || !P.video.getAttribute("src")) return;
+  SFX.error();
+  toast("This video couldn't be played. Try converting it to .mp4 (H.264).", 4500);
+});
+$("#close").addEventListener("click", () => closePlayer());
+$("#backdrop").addEventListener("click", () => closePlayer());
+document.addEventListener("keydown", e => {
+  if (P.el.hidden) {
+    if (e.key === "/" && document.activeElement !== $("#search")) { e.preventDefault(); $("#search").focus(); }
+    return;
+  }
+  if (e.key === "Escape") closePlayer();
+  else if (e.key === " " && e.target !== P.video) { e.preventDefault(); P.video.paused ? P.video.play() : P.video.pause(); }
+  else if (e.key === "f") { (P.video.requestFullscreen || P.video.webkitEnterFullscreen || (() => {})).call(P.video); }
+});
+
+/* ============================ wiring ============================ */
+function init() {
+  document.title = CFG.title;
+  $("#siteTitle").textContent = CFG.title;
+  $("#siteTitle").dataset.text = CFG.title;
+  $("#tagline").textContent = CFG.tagline;
+
+  buildThemeMenu();
+  BG.start();
+  applyTheme(store.get("ssp:theme", CFG.theme));
+
+  const sfxBtn = $("#sfxBtn");
+  sfxBtn.setAttribute("aria-pressed", SFX.on);
+  sfxBtn.addEventListener("click", () => {
+    SFX.on = !SFX.on; sfxBtn.setAttribute("aria-pressed", SFX.on);
+    if (SFX.on) SFX.toggle();
+    toast(SFX.on ? "Sound effects on" : "Sound effects off", 1400);
+  });
 
   const grid = $("#grid");
-  grid.innerHTML = "";
-  $("#browseEmpty").classList.toggle("hidden", rows.length > 0);
-  if (!rows.length) { $("#browseEmptyMsg").textContent = "Start an episode and it will show up here."; return; }
-
-  rows.forEach(({ s, ep, p }) => {
-    const pct = Math.min(100, (p.t / p.d) * 100);
-    const el = document.createElement("div");
-    el.className = "card";
-    el.innerHTML =
-      `<div class="card-art" style="aspect-ratio:16/9;background:${coverGradient(s.title)}">
-         ${ep.thumb ? `<img src="${esc(ep.thumb)}" alt="" loading="lazy" onerror="this.remove()">` : ""}
-         <span class="ep-progress" style="width:${pct}%;height:4px"></span>
-       </div>
-       <div class="card-title">${esc(s.title)}</div>
-       <div class="card-sub">E${ep.n} · ${clock(p.t)} of ${clock(p.d)}</div>`;
-    el.onclick = () => playEpisode(s, ep);
-    grid.appendChild(el);
+  grid.addEventListener("click", e => {
+    const card = e.target.closest(".card"); if (!card) return;
+    const v = byPath(card.dataset.path); if (v) openPlayer(v, card);
   });
-}
+  grid.addEventListener("pointerover", e => {
+    const card = e.target.closest(".card");
+    if (card && !card.contains(e.relatedTarget)) SFX.hover();
+  });
+  tilt(grid);
 
-/* =====================================================================
-   SIDEBAR / EVENTS
-   ===================================================================== */
-const openSidebar  = () => { $("#sidebar").classList.remove("-translate-x-full"); $("#scrim").classList.remove("hidden"); };
-const closeSidebar = () => { $("#sidebar").classList.add("-translate-x-full"); $("#scrim").classList.add("hidden"); };
-
-function wire() {
-  $("#sidebarOpen").onclick = openSidebar;
-  $("#sidebarClose").onclick = closeSidebar;
-  $("#scrim").onclick = closeSidebar;
-
-  $("#search").oninput = e => {
-    $$(".nav-item").forEach(n => n.classList.toggle("active", n.dataset.view === "browse"));
-    showView("browse");
-    renderGrid(e.target.value);
-  };
-
-  $$(".nav-item").forEach(n => n.onclick = () => {
-    $$(".nav-item").forEach(x => x.classList.toggle("active", x === n));
-    showView("browse");
-    n.dataset.view === "continue" ? renderContinue() : renderGrid($("#search").value);
-    closeSidebar();
+  $("#chips").addEventListener("click", e => {
+    const c = e.target.closest(".chip"); if (!c) return;
+    state.cat = c.dataset.cat; SFX.chip();
+    document.querySelectorAll(".chip").forEach(x => x.setAttribute("aria-pressed", x === c));
+    render();
   });
 
-  $("#seasonSelect").onchange = e => {
-    state.current.seasonIdx = Number(e.target.value);
-    renderEpisodes();
-  };
-
-  $("#prevEp").onclick = () => { const e = neighbourEpisode(-1); if (e) playEpisode(state.current.series, e); };
-  $("#nextEp").onclick = () => { const e = neighbourEpisode(1);  if (e) playEpisode(state.current.series, e); };
-
-  // keyboard shortcuts, skipped while typing in a field
-  document.addEventListener("keydown", e => {
-    if (!state.art || /INPUT|TEXTAREA|SELECT/.test(document.activeElement.tagName)) return;
-    const a = state.art;
-    const k = e.key.toLowerCase();
-    if (k === " " || k === "k") { e.preventDefault(); a.toggle(); }
-    if (k === "arrowright") { e.preventDefault(); a.currentTime = Math.min(a.duration, a.currentTime + 10); }
-    if (k === "arrowleft")  { e.preventDefault(); a.currentTime = Math.max(0, a.currentTime - 10); }
-    if (k === "arrowup")    { e.preventDefault(); a.volume = Math.min(1, a.volume + 0.1); }
-    if (k === "arrowdown")  { e.preventDefault(); a.volume = Math.max(0, a.volume - 0.1); }
-    if (k === "f") a.fullscreen = !a.fullscreen;
-    if (k === "n") { const n = neighbourEpisode(1); if (n) playEpisode(state.current.series, n); }
+  let st;
+  $("#search").addEventListener("input", e => {
+    clearTimeout(st); st = setTimeout(() => { state.filter = e.target.value; render(); }, 120);
   });
 
-  // Jellyfin sign-in
-  $("#loginBtn").onclick = () => $("#loginModal").classList.replace("hidden", "flex");
-  $("#loginCancel").onclick = () => $("#loginModal").classList.replace("flex", "hidden");
-  $("#loginGo").onclick = doLogin;
-  $("#jfPass").onkeydown = e => { if (e.key === "Enter") doLogin(); };
-}
+  $("#shuffle").addEventListener("click", () => {
+    const cards = [...grid.querySelectorAll(".card")];
+    if (!cards.length) { SFX.error(); return toast("No videos to shuffle yet"); }
+    const card = cards[Math.floor(Math.random() * cards.length)];
+    card.scrollIntoView({ block: "center", behavior: REDUCED ? "auto" : "smooth" });
+    setTimeout(() => openPlayer(byPath(card.dataset.path), card), REDUCED ? 0 : 350);
+  });
 
-async function doLogin() {
-  const err = $("#loginErr");
-  err.classList.add("hidden");
-  const btn = $("#loginGo");
-  btn.disabled = true; btn.textContent = "Signing in…";
-  try {
-    const auth = await JellyfinSource.login($("#jfUser").value.trim(), $("#jfPass").value);
-    $("#loginModal").classList.replace("flex", "hidden");
-    $("#loginBtn").classList.add("hidden");
-    const chip = $("#userChip");
-    chip.classList.remove("hidden"); chip.classList.add("flex");
-    chip.textContent = auth.name;
-    await loadLibrary();
-  } catch (e) {
-    err.textContent = e.message;
-    err.classList.remove("hidden");
-  } finally {
-    btn.disabled = false; btn.textContent = "Sign in";
-  }
-}
+  document.addEventListener("pointerover", e => {
+    if (e.target.closest(".icon, .chip, .themes button") && !e.target.closest(".icon, .chip, .themes button").contains(e.relatedTarget)) SFX.hover();
+  });
 
-async function loadLibrary() {
-  try {
-    state.series = await state.source.library();
-  } catch (e) {
-    state.series = [];
-    toast(e.message || "Could not load the library.");
-  }
-  renderSeriesList();
-  renderGrid();
-}
+  $("#grid").innerHTML = Array.from({ length: 8 }, (_, i) =>
+    `<div class="card" style="--i:${i}"><div class="thumb"><div class="ph"></div></div><div class="meta"><h3>&nbsp;</h3><p>&nbsp;</p></div></div>`).join("");
 
-/* =====================================================================
-   BOOT
-   ===================================================================== */
-async function boot() {
-  $("#siteTitle").textContent = CFG.site?.title || "Anime Portal";
-  document.title = CFG.site?.title || "Anime Portal";
-  if (CFG.site?.accent) document.documentElement.style.setProperty("--accent", CFG.site.accent);
-
-  state.source = CFG.source === "jellyfin" ? JellyfinSource : DirectSource;
-
-  $("#sourceBadge").innerHTML = state.source.name === "jellyfin"
-    ? `Jellyfin · full track switching`
-    : `Direct file · <span style="color:#fda4af">no embedded track switching</span>`;
-
-  if (state.source.name === "jellyfin") {
-    const auth = JellyfinSource.loadAuth();
-    if (auth?.userId) {
-      const chip = $("#userChip");
-      chip.classList.remove("hidden"); chip.classList.add("flex");
-      chip.textContent = auth.name;
-    } else {
-      $("#loginBtn").classList.remove("hidden");
+  loadVideos().then(items => {
+    state.all = items.sort((a, b) => a.category.localeCompare(b.category) || a.title.localeCompare(b.title, undefined, { numeric: true }));
+    buildChips();
+    render();
+    const hash = decodeURIComponent(location.hash.slice(1));
+    if (hash) {
+      const v = byPath(hash);
+      if (v) openPlayer(v, document.querySelector(`.card[data-path="${CSS.escape(v.path)}"]`));
     }
-  }
-
-  wire();
-  await loadLibrary();
+  }).catch(err => {
+    $("#grid").innerHTML = "";
+    $("#empty").hidden = false;
+    toast("Couldn't reach GitHub to list videos. Try again in a minute.", 5000);
+    console.error(err);
+  });
 }
 
-boot();
+init();
 })();

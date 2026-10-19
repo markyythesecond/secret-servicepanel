@@ -1,43 +1,39 @@
 /* =====================================================================
-   config.js — the only file you edit.
+   config.js — site settings.
 
-   baseUrl gets stuck on the front of every "file" path below, so you only
-   write the bit that changes.
+   HOW TO ADD VIDEOS
+   -----------------
+   1. On GitHub, open the `videos` folder in this repo.
+   2. "Add file" -> "Upload files" -> drop your .mp4 / .webm / .mov files.
+   3. Commit. The site picks them up automatically in about a minute.
 
-   Each episode can be written two ways:
+   Optional extras:
+   - Put videos in a subfolder (videos/Funny/clip.mp4) and "Funny" becomes
+     a category button on the site.
+   - Want a custom thumbnail? Upload an image with the SAME name next to
+     the video:  videos/clip.mp4  +  videos/clip.jpg   (jpg, png or webp)
+     Otherwise the site grabs a frame from the video automatically.
+   - The file name becomes the title: "my_cool-clip.mp4" -> "my cool clip".
 
-     "Season 01/E01.mkv"                        <- just the path, auto-numbered
-     { n: 1, title: "Name", file: "E01.mkv" }   <- with a title
-
-   Mix them freely.
+   GitHub limits: 25 MB per file when uploading in the browser,
+   100 MB per file with git. Use .mp4 (H.264) for the best compatibility.
    ===================================================================== */
 
-window.LIBRARY = {
+window.SITE = {
+  title: "Secret Service Panel",
+  tagline: "Classified footage. Authorized eyes only.",
 
-  siteTitle: "mark's Anime Library",  // Appears in the browser tab and at the top of the page
+  github: {
+    owner:  "markyythesecond",
+    repo:   "secret-servicepanel",
+    branch: "main",
+    folder: "videos"
+  },
 
-  // Your NAS. Must be https:// or the browser will block it, because this
-  // site is served over https. No trailing slash.
-  baseUrl: "https://nas.yourdomain.com:5006/anime",
+  // Default look. Visitors can switch with the theme button.
+  // Options: "classified", "neon", "crimson", "terminal", "daylight"
+  theme: "classified",
 
-  series: [
-    {
-      title: "Example Series",
-      poster: "",              // optional image URL; blank draws a cover instead
-      episodes: [
-        { n: 1, title: "The First Episode",  file: "Example Series/S01E01.mkv" },
-        { n: 2, title: "The Second Episode", file: "Example Series/S01E02.mkv" },
-        "Example Series/S01E03.mkv"
-      ]
-    },
-
-    {
-      title: "Another Series",
-      poster: "",
-      episodes: [
-        "Another Series/E01.mkv",
-        "Another Series/E02.mkv"
-      ]
-    }
-  ]
+  // Sound effects on by default? Visitors can mute with the speaker button.
+  sfx: true
 };
